@@ -28,6 +28,7 @@
 #include "effects.h"
 #include "arrows.h"
 #include "explosion.h"
+#include "beds.h"
 #include "spawning.h"
 
 int client_states[MAX_CONNECTIONS * 2];
@@ -207,6 +208,7 @@ void handlePlayerJoin (PlayerData* player) {
   if (player->flags & 0x20) {
     combat_forget_player(player);
     eff_clear(player);
+    beds_forget(player);
     #ifndef ESP_PLATFORM
     // End-to-end tests only: BAREIRON_TEST_KIT="item:count,..." on joining
     const char *kit = getenv("BAREIRON_TEST_KIT");
@@ -1237,6 +1239,8 @@ void handlePlayerAction (PlayerData *player, int action, short x, short y, short
 
   // The block pops out as an item, picked up by walking over it
   if (item) drop_pop(item, 1, x + 0.5, y + 0.25, z + 0.5);
+  // A bed's other half goes with it (one bed drops)
+  if (bed_is_part(block)) bed_break(x, y, z, block);
 
   // Update nearby fluids
   uint8_t block_above = getBlockAt(x, y + 1, z);
@@ -1270,6 +1274,26 @@ void handlePlayerUseItem (PlayerData *player, short x, short y, short z, uint8_t
   // Get held item properties
   uint8_t *count = &player->inventory_count[player->hotbar];
   uint16_t *item = &player->inventory_items[player->hotbar];
+
+  // A bed: sleep in it (sneaking players place blocks against it instead)
+  if (face != 255 && bed_is_part(target) && !(player->flags & 0x04)) {
+    bed_use(player, x, y, z);
+    return;
+  }
+
+  // A bed item: two blocks, the head the way the player faces
+  if (face != 255 && *item == I_white_bed) {
+    short bx = x, bz = z; uint8_t by = y;
+    switch (face) {
+      case 0: by -= 1; break; case 1: by += 1; break;
+      case 2: bz -= 1; break; case 3: bz += 1; break;
+      case 4: bx -= 1; break; case 5: bx += 1; break;
+      default: break;
+    }
+    if (bed_place(player, bx, by, bz) && GAMEMODE != 1 && -- *count == 0) *item = 0;
+    sc_setContainerSlot(player->client_fd, 0, serverSlotToClientSlot(0, player->hotbar), *count, *item);
+    return;
+  }
 
   // Flint and steel lights TNT
   if (face != 255 && target == B_tnt && *item == I_flint_and_steel) {
@@ -1590,6 +1614,7 @@ void handleServerTick (int64_t time_since_last_tick) {
   drops_tick();
   arrows_tick();
   tnt_tick();
+  beds_tick();
 
   // Entities' movement and who sees them, every few ticks
   ent_network_tick();
@@ -1629,6 +1654,10 @@ ssize_t writeEntityData (int client_fd, EntityData *data) {
       return 0;
     case 3: // Float
       return writeFloat(client_fd, data->value.f);
+    case 11: // Optional Block Position
+      writeByte(client_fd, data->value.position.present);
+      if (data->value.position.present) writeUint64(client_fd, data->value.position.packed);
+      return 0;
     case 7: // Slot: count, then item and no component changes
       writeVarInt(client_fd, data->value.slot.count);
       if (data->value.slot.count) {
@@ -1657,6 +1686,9 @@ int sizeEntityData (EntityData *data) {
       break;
     case 3: // Float
       value_size = 4;
+      break;
+    case 11: // Optional Block Position
+      value_size = data->value.position.present ? 9 : 1;
       break;
     case 7: // Slot
       value_size = sizeVarInt(data->value.slot.count) +

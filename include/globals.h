@@ -224,11 +224,12 @@ union EntityDataValue {
   int pose;          // Pose, VarInt
   float f;           // Float
   struct { uint16_t item; uint8_t count; } slot;   // Slot
+  struct { uint8_t present; uint64_t packed; } position;   // Optional Block Position
 };
 
 typedef struct {
   uint8_t index;
-  // 0 - Byte, 1 - VarInt, 3 - Float, 7 - Slot, 8 - Boolean, 21 - Pose
+  // 0 - Byte, 1 - VarInt, 3 - Float, 7 - Slot, 8 - Boolean, 11 - Optional Block Position, 21 - Pose
   int type;
   union EntityDataValue value;
 } EntityData;

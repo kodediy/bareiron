@@ -52,6 +52,7 @@ SB_PLAY_PLAYER_ACTION = 0x28
 SB_PLAY_PLAYER_LOADED = 0x2B
 SB_PLAY_USE_ITEM = 0x40
 SB_PLAY_CLIENT_COMMAND = 0x0B
+SB_PLAY_USE_ITEM_ON = 0x3F
 
 
 class Disconnected(Exception):
@@ -351,6 +352,11 @@ class Bot:
   def use_item(self, yaw=0.0, pitch=0.0):
     """Right click in the air with the held item (draws a bow)."""
     self.send(SB_PLAY_USE_ITEM, varint(0) + varint(0) + struct.pack(">ff", yaw, pitch))
+
+  def use_item_on(self, x, y, z, face=1):
+    """Right click on a block face (1 = its top): places the held block, uses a bed."""
+    self.send(SB_PLAY_USE_ITEM_ON, varint(0) + block_position(x, y, z) + varint(face)
+              + struct.pack(">fff", 0.5, 1.0, 0.5) + bytes([0, 0]) + varint(0))
 
   def release_use_item(self):
     """Lets go of the held item (shoots a drawn bow)."""

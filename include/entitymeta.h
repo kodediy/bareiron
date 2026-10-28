@@ -14,6 +14,7 @@
 #define META_T_FLOAT       3
 #define META_T_SLOT        7
 #define META_T_BOOLEAN     8
+#define META_T_OPT_POSITION 11
 #define META_T_BLOCK_STATE 14
 #define META_T_POSE        21
 

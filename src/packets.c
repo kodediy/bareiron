@@ -20,6 +20,7 @@
 #include "varnum.h"
 #include "registries.h"
 #include "combat.h"
+#include "beds.h"
 #include "worldgen.h"
 #include "crafting.h"
 #include "procedures.h"
@@ -1211,6 +1212,12 @@ int cs_clientStatus (int client_fd) {
   if (id == 0) {
     sc_respawn(client_fd);
     resetPlayerData(player);
+    // Back to life in its bed, if it slept in one that is still there
+    short bx, bz; uint8_t by;
+    if (bed_spawn(player, &bx, &by, &bz)) {
+      player->x = bx; player->y = by; player->z = bz;
+      player->flags &= ~0x02;   // at the bed's height, not the terrain's
+    }
     spawnPlayer(player);
   }
 
@@ -1420,6 +1427,9 @@ int cs_playerCommand (int client_fd) {
 
   PlayerData *player;
   if (getPlayerData(client_fd, &player)) return 1;
+
+  // Leaving a bed
+  if (action == 0) bed_wake(player);
 
   // Handle sprinting
   if (action == 1) player->flags |= 0x08;

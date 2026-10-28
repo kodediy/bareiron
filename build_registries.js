@@ -159,6 +159,31 @@ async function extractItemsAndBlocks () {
     if (mapping.length === 256) break;
   }
 
+  // Beds take two blocks and face a way: the white bed's 8 states (foot and
+  // head, four facings, not occupied) take the slots of the first 8 bed
+  // colours, which cannot be dyed in KodeCraft, so no other block id moves
+  // and saved worlds keep their blocks
+  const bedSlots = ["white_bed", "orange_bed", "magenta_bed", "light_blue_bed",
+                    "yellow_bed", "lime_bed", "pink_bed", "gray_bed"];
+  const bedOrder = [];
+  for (const facing of ["north", "south", "west", "east"]) {
+    for (const part of ["foot", "head"]) bedOrder.push([facing, part]);
+  }
+  const bedStates = blockSource["minecraft:white_bed"].states;
+  const paletteEntries = Object.entries(palette);
+  for (const key of Object.keys(palette)) delete palette[key];
+  paletteEntries.forEach(([block, id], i) => {
+    const slot = bedSlots.indexOf(block);
+    if (slot < 0) { palette[block] = id; return; }
+    const [facing, part] = bedOrder[slot];
+    const state = bedStates.find(st => st.properties.facing === facing &&
+      st.properties.part === part && st.properties.occupied === "false");
+    palette[`white_bed_${part}_${facing}`] = state.id;
+    // Every part drops a white bed; only the north foot is what the item places
+    mapping[i] = slot === 0 ? items["white_bed"] : 0;
+    mappingWithOverrides[i] = items["white_bed"];
+  });
+
   // Build list of block IDs, but from the registries
   // Tags refer to these IDs, not the actual blocks
   const blockRegistry = {};
@@ -413,7 +438,7 @@ async function convert () {
   const blastSource = JSON.parse(await fs.readFile(`${__dirname}/blast_resistance.json`, "utf8"));
   const blastAliases = { "snowy_grass_block": "grass_block" };
   const blastResistance = Object.keys(itemsAndBlocks.palette).map(block => {
-    const name = blastAliases[block] || block.replace(/_\d+$/, "");
+    const name = blastAliases[block] || (block.startsWith("white_bed_") ? "white_bed" : block.replace(/_\d+$/, ""));
     if (!(name in blastSource)) throw new Error(`no blast resistance for ${block}`);
     return blastSource[name];
   });
