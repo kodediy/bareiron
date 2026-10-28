@@ -108,3 +108,19 @@ En el P4 este código va unas 100 veces más lento que en el Mac, no 20-40 como 
 - **Aparición:** un intento por jugador cada 4 ticks, con los topes contados una vez por tick.
 - **Resultado en el Mac,** tick con 48 mobs: de 143 µs a 47 µs.
 - **Los chunks:** por sí solos (~30 ms) ya pasan del objetivo de 30 ms por vuelta. Es lo que resuelven las Tasks 3-4 del Plan 4: la caché de chunks en PSRAM y generar en el otro núcleo.
+
+Después de la revisión final (sesión 6, 6 bots durante 25 minutos, peor de cada 10 s: mediana / p90 / máximo):
+
+| P4 | ms |
+|---|---:|
+| Tick entero | 14 / 21 / 50 |
+| · mobs (hasta 57 entidades) | 11 / 17 / 47 |
+| · aparición | 4 / 6 / 8 |
+| · objetos, flechas, TNT | 2 / 3 / 5 |
+| · red de entidades | 1 / 2 / 4 |
+| Un chunk enviado | 29 / 31 / 34 |
+| Vuelta del bucle, sin la entrada de los bots | 45 / 52 / 62 |
+
+- **Un camino recortado ya no se repite cada segundo.** Un camino se corta a 8 pasos, y antes se daba por viejo cuando esos 8 pasos acababan lejos del jugador. Ahora se compara adónde se buscó.
+- **Una búsqueda sin presupuesto sigue esperando su segundo.** Reintentarla enseguida, como pedía la revisión, hacía un 40 % más de búsquedas en el banco del Mac (60 mobs: tick medio de 37 a 47 µs).
+- **El tick con mobs cabe en 30 ms en el p90.** La vuelta no, por el chunk: Plan 4, Tasks 3-4.
