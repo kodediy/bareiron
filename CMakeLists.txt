@@ -10,7 +10,7 @@ endif()
 
 # Every server source but the computer's entry point and its platform: a
 # new file can't be left out of the firmware
-file(GLOB BAREIRON_SRCS "${CMAKE_CURRENT_LIST_DIR}/src/*.c")
+file(GLOB BAREIRON_SRCS CONFIGURE_DEPENDS "${CMAKE_CURRENT_LIST_DIR}/src/*.c")
 list(FILTER BAREIRON_SRCS EXCLUDE REGEX "/src/(main|platform_posix)\\.c$")
 
 idf_component_register(
