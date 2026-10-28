@@ -11,6 +11,7 @@
 #include "mobs.h"
 #include "combat.h"
 #include "drops.h"
+#include "effects.h"
 
 // What a player's combat needs from tick to tick and nobody saves
 typedef struct {
@@ -199,6 +200,7 @@ static void hurtPlayer (int32_t target_id, int32_t attacker_id, uint8_t damage_t
     died = 1;
     deathMessage(player, attacker_id, damage_type, amount);
     drops_spill_inventory(player);
+    eff_clear(player);
   } else {
     player->health -= whole;
   }

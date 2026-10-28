@@ -25,6 +25,7 @@
 #include "mobs.h"
 #include "combat.h"
 #include "drops.h"
+#include "effects.h"
 #include "spawning.h"
 
 int client_states[MAX_CONNECTIONS * 2];
@@ -201,7 +202,10 @@ void handlePlayerDisconnect (int client_fd) {
 // Marks a client as connected and broadcasts their data to other players
 void handlePlayerJoin (PlayerData* player) {
 
-  if (player->flags & 0x20) combat_forget_player(player);
+  if (player->flags & 0x20) {
+    combat_forget_player(player);
+    eff_clear(player);
+  }
 
   // Clients also report "loaded" after respawning; only the first one
   // after logging in is a join for the host
@@ -1035,6 +1039,9 @@ uint8_t handlePlayerEating (PlayerData *player, uint8_t just_check) {
   // If just checking the item, return before making any changes
   if (just_check) return food != 0;
 
+  // Rotten flesh: Hunger for 30 s, 4 times in 5
+  if (*held_item == I_rotten_flesh && fast_rand() % 10 < 8) eff_apply(player, EFF_HUNGER, 0, 600);
+
   // Apply saturation and food boost
   player->saturation += saturation;
   player->hunger += food;
@@ -1467,6 +1474,8 @@ void handleServerTick (int64_t time_since_last_tick) {
     }
     // Position, health and inventory change all the time while playing
     markWorldDirty();
+    // Status effects run down, hunger drains
+    eff_tick(player);
     // Reset player attack cooldown
     if (player->flags & 0x01) {
       if (player->flagval_8 >= (uint8_t)(0.6f * TICKS_PER_SECOND)) {
