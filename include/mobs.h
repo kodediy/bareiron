@@ -15,6 +15,7 @@
 #define MOB_DESPAWN_FAR 128      // a hostile further than this from every player goes at once
 #define MOB_DESPAWN_NEAR 32      // further than this for MOB_ALONE_TICKS, it may go: 1 in 800 a tick
 #define MOB_ALONE_TICKS 600
+#define MOB_SIM_DISTANCE 64      // animals further than this from every player are frozen
 
 typedef enum { CAT_MONSTER, CAT_CREATURE, CAT_AMBIENT, CAT_WATER } MobCategory;
 

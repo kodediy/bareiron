@@ -667,12 +667,16 @@ void mobs_tick (void) {
     if (e->u.mob.provoked) e->u.mob.provoked --;
     if (t->category == CAT_CREATURE) animalLife(e);
 
-    // Far from every player: hostiles go, animals (for now) at twice that
+    // Far from every player: hostiles go; animals are kept, and past the
+    // simulation distance they wait, frozen, as in unloaded chunks
     double d;
     PlayerData *near = nearestPlayer(e, 1e9, &d);
-    double limit = t->category == CAT_MONSTER ? MOB_DESPAWN_FAR : MOB_DESPAWN_DISTANCE;
-    if (!near || d > limit) {
-      ent_remove(e);
+    if (t->category == CAT_MONSTER) {
+      if (!near || d > MOB_DESPAWN_FAR) {
+        ent_remove(e);
+        continue;
+      }
+    } else if (!near || d > MOB_SIM_DISTANCE) {
       continue;
     }
     // Vanilla's random despawn: a hostile with nobody within 32 blocks for

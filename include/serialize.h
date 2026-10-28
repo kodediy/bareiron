@@ -12,7 +12,7 @@
 // when the server stops, never once per block.
 
 #define WORLD_MAGIC 0x4B435731u   // "KCW1"
-#define WORLD_VERSION 1
+#define WORLD_VERSION 2   // 1: no entities, no beds (still read)
 
 #pragma pack(push, 1)
 typedef struct {
@@ -25,6 +25,30 @@ typedef struct {
   uint32_t player_size;
   uint16_t world_time;
 } WorldHeader;
+// Version 2 adds, after the players: the persistent entities (animals and
+// items on the ground) and each player slot's bed
+typedef struct {
+  uint16_t type;
+  uint8_t  flags;
+  uint8_t  yaw;
+  int32_t  x, y, z;
+  float    health;
+  uint32_t age;
+  uint16_t timer;
+  uint16_t item;      // an item: what and how many
+  uint8_t  count;
+  uint8_t  wool;      // a sheep's colour
+  uint16_t grow;      // a baby's ticks so far
+  uint16_t breed_cd;
+  uint16_t egg;
+} EntitySave;
+
+typedef struct {
+  uint8_t has;
+  short   x;
+  uint8_t y;
+  short   z;
+} BedSave;
 #pragma pack(pop)
 
 size_t worldSnapshotSize (void);

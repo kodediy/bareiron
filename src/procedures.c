@@ -131,6 +131,7 @@ int reservePlayerData (int client_fd, uint8_t *uuid, char *name) {
       memcpy(player_data[i].uuid, uuid, 16);
       memcpy(player_data[i].name, name, 16);
       resetPlayerData(&player_data[i]);
+      beds_forget(&player_data[i]);   // a new player in the slot: no bed yet
       player_data_count ++;
       return 0;
     }
@@ -208,7 +209,6 @@ void handlePlayerJoin (PlayerData* player) {
   if (player->flags & 0x20) {
     combat_forget_player(player);
     eff_clear(player);
-    beds_forget(player);
     #ifndef ESP_PLATFORM
     // End-to-end tests only: BAREIRON_TEST_KIT="item:count,..." on joining
     const char *kit = getenv("BAREIRON_TEST_KIT");

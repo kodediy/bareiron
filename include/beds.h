@@ -26,5 +26,8 @@ void    beds_tick (void);
 // Where p comes back to life: its bed, if the bed is still there
 uint8_t bed_spawn (const PlayerData *p, short *x, uint8_t *y, short *z);
 void    beds_forget (PlayerData *p);   // a new player in this slot
+// The saved world keeps each player slot's bed
+uint8_t bed_spawn_point (int slot, short *x, uint8_t *y, short *z);
+void    bed_set_spawn_point (int slot, uint8_t has, short x, uint8_t y, short z);
 
 #endif

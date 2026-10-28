@@ -184,6 +184,17 @@ uint8_t bed_spawn (const PlayerData *p, short *x, uint8_t *y, short *z) {
   return 1;
 }
 
+uint8_t bed_spawn_point (int slot, short *x, uint8_t *y, short *z) {
+  *x = state[slot].x; *y = state[slot].y; *z = state[slot].z;
+  return state[slot].has_spawn;
+}
+
+void bed_set_spawn_point (int slot, uint8_t has, short x, uint8_t y, short z) {
+  state[slot].sleeping = 0;
+  state[slot].has_spawn = has;
+  state[slot].x = x; state[slot].y = y; state[slot].z = z;
+}
+
 void beds_forget (PlayerData *p) {
   memset(&state[p - player_data], 0, sizeof(PlayerBed));
 }

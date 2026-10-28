@@ -46,5 +46,57 @@ class PersistenceTest(unittest.TestCase):
       second.stop()
 
 
+  def test_items_on_ground_survive_restart(self):
+    """A block mined out of reach lies on the ground; after a restart it is still there."""
+    world = tempfile.mkdtemp(prefix="bareiron-persist-")
+    first = ServerProcess(PORT, world).start()
+    try:
+      miner = Bot(port=PORT, name="miner")
+      miner.login()
+      miner.pump(2.0)
+      x, y, z = miner.position
+      miner.break_block(int(x // 1) + 3, int(y // 1) - 1, int(z // 1))   # 3 blocks off: not picked up
+      miner.pump(1.0)
+      before = sorted((round(e["x"], 2), round(e["y"], 2), round(e["z"], 2))
+                      for e in miner.entities.values() if e["type"] == 69)
+      self.assertTrue(before, "a mined block lies on the ground")
+      miner.close()
+    finally:
+      first.stop()
+    second = ServerProcess(PORT, world).start()
+    try:
+      looker = Bot(port=PORT, name="looker")
+      looker.login()
+      looker.pump(2.0)
+      after = sorted((round(e["x"], 2), round(e["y"], 2), round(e["z"], 2))
+                     for e in looker.entities.values() if e["type"] == 69)
+      self.assertEqual(before, after)
+      looker.close()
+    finally:
+      second.stop()
+
+  def test_animals_survive_restart(self):
+    """Animals are saved with the world, in the same spots."""
+    world = tempfile.mkdtemp(prefix="bareiron-persist-")
+    first = ServerProcess(PORT, world, env={"BAREIRON_TEST_MOBS": "4"}).start()
+    bot = Bot(port=PORT, name="farmer")
+    bot.login()
+    bot.pump(2.0)
+    cows = len([e for e in bot.entities.values() if e["type"] == 28])
+    bot.close()
+    time.sleep(0.5)                            # nobody on: the cows stand still
+    first.stop()
+    self.assertGreaterEqual(cows, 4)
+    second = ServerProcess(PORT, world).start()   # no test cows this time
+    try:
+      bot = Bot(port=PORT, name="farmer")
+      bot.login()
+      bot.pump(2.0)
+      self.assertEqual(len([e for e in bot.entities.values() if e["type"] == 28]), cows)
+      bot.close()
+    finally:
+      second.stop()
+
+
 if __name__ == "__main__":
   unittest.main()
