@@ -584,6 +584,35 @@ static void cluck (const Entity *e, int client_fd) {
   sc_soundEntity(client_fd, S_entity_chicken_egg, 6, e->id, 1.0f, 1.0f);
 }
 
+// Grass a sheep ate, oldest first: it spreads back over the dirt after
+// MOB_GRASS_REGROW_TICKS (vanilla grass creeps back the same way), so
+// grazing never fills the block-change store. When the list is full the
+// oldest grows back at once. A restart forgets the list: those few spots
+// stay dirt.
+#define GRAZED_MAX 64
+typedef struct { short x, z; uint8_t y; uint32_t at; } Grazed;
+static Grazed grazed[GRAZED_MAX];
+static uint8_t grazed_first = 0, grazed_count = 0;
+
+static void regrowOldest (void) {
+  Grazed *g = &grazed[grazed_first];
+  grazed_first = (grazed_first + 1) % GRAZED_MAX;
+  grazed_count --;
+  if (getBlockAt(g->x, g->y, g->z) == B_dirt && isPassableBlock(getBlockAt(g->x, g->y + 1, g->z))) {
+    makeBlockChange(g->x, g->y, g->z, B_grass_block);
+  }
+}
+
+static void grassEaten (int x, int y, int z) {
+  if (grazed_count == GRAZED_MAX) regrowOldest();
+  grazed[(grazed_first + grazed_count) % GRAZED_MAX] = (Grazed){ (short)x, (short)z, (uint8_t)y, server_ticks };
+  grazed_count ++;
+}
+
+static void grassTick (void) {
+  while (grazed_count && server_ticks - grazed[grazed_first].at >= MOB_GRASS_REGROW_TICKS) regrowOldest();
+}
+
 // An animal's day: growing up, sheep grazing, chickens laying
 static void animalLife (Entity *e) {
   if (e->u.mob.love) e->u.mob.love --;
@@ -597,6 +626,7 @@ static void animalLife (Entity *e) {
   if (e->type == E_sheep && fast_rand() % ((e->flags & ENT_BABY) ? EAT_GRASS_BABY : EAT_GRASS_ADULT) == 0) {
     int x = (int)floor(ex(e)), y = (int)floor(ey(e) + 0.01), z = (int)floor(ez(e));
     if (getBlockAt(x, y - 1, z) == B_grass_block && !makeBlockChange(x, y - 1, z, B_dirt)) {
+      grassEaten(x, y - 1, z);
       toTrackers(e, eatAnimation);
       if (e->flags & ENT_SHEARED) { e->flags &= ~ENT_SHEARED; toTrackers(e, sendWool); }
       if (e->flags & ENT_BABY) e->u.mob.grow += 1200;   // a grazing lamb grows a minute
@@ -642,6 +672,7 @@ void mobs_tick (void) {
   uint8_t anyone = 0;
   for (int i = 0; i < MAX_PLAYERS && !anyone; i ++) anyone = playerActive(&player_data[i]);
   if (!anyone) return;
+  grassTick();
 
   for (uint32_t i = 0; i < ent_capacity(); i ++) {
     Entity *e = ent_at(i);
@@ -667,7 +698,6 @@ void mobs_tick (void) {
     if (e->u.mob.panic) e->u.mob.panic --;
     if (e->u.mob.look_ticks) e->u.mob.look_ticks --;
     if (e->u.mob.provoked) e->u.mob.provoked --;
-    if (t->category == CAT_CREATURE) animalLife(e);
 
     // Far from every player: hostiles go; animals are kept, and past the
     // simulation distance they wait, frozen, as in unloaded chunks
@@ -680,6 +710,8 @@ void mobs_tick (void) {
       }
     } else if (!near || d > MOB_SIM_DISTANCE) {
       continue;
+    } else {
+      animalLife(e);
     }
     // Vanilla's random despawn: a hostile with nobody within 32 blocks for
     // 30 s may go, 1 in 800 a tick

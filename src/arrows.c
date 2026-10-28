@@ -171,7 +171,7 @@ static void fly (Entity *e) {
 void arrows_tick (void) {
   for (uint32_t i = 0; i < ent_capacity(); i ++) {
     Entity *e = ent_at(i);
-    if (e->type != E_arrow) continue;
+    if (e->type != E_arrow || !ent_simulated(e)) continue;
     e->age ++;
     if (e->u.arrow.in_ground) {
       if (++ e->timer > ARROW_STUCK_LIFETIME) { ent_remove(e); continue; }

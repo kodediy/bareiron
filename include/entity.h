@@ -15,6 +15,7 @@
 #define ENT_UNIT 4096               // positions are in 1/4096 of a block
 #define ENT_DEFAULT_CAPACITY 512
 #define ENT_NETWORK_EVERY 3         // vanilla sends living mobs every 3 ticks
+#define ENT_SIM_DISTANCE 64         // blocks across: further from everyone, things wait as in an unloaded chunk
 
 // flags
 #define ENT_ON_GROUND  0x01
@@ -98,6 +99,7 @@ void     ent_moved (Entity *e);         // mark for the next network turn
 void     ent_network_tick (void);       // each tick; works every ENT_NETWORK_EVERY
 void     ent_track_player (PlayerData *p);   // spawn what it should see, remove what it should not
 void     ent_track_now (Entity *e);         // spawn a new entity to its viewers now, not at the next turn
+uint8_t  ent_simulated (const Entity *e);   // someone in the game within ENT_SIM_DISTANCE: what nobody is near waits
 void     ent_untrack_player (PlayerData *p); // it left: forget it, sends nothing
 uint8_t  ent_kind_of (uint16_t type);
 

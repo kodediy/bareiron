@@ -128,6 +128,20 @@ static void test_sheep_eats_grass_and_regrows (void) {
   CHECK(dirt >= 1);
 }
 
+// Grass a sheep ate grows back, so grazing never fills the block-change store
+static void test_grazed_grass_grows_back (void) {
+  setup(B_grass_block);
+  Entity *s = mob_spawn(E_sheep, (int32_t)(10.5 * ENT_UNIT), (FLOOR + 1) * ENT_UNIT, (int32_t)(10.5 * ENT_UNIT));
+  s->flags |= ENT_SHEARED;
+  for (int t = 0; t < 8000 && (s->flags & ENT_SHEARED); t ++) tick();
+  CHECK(!(s->flags & ENT_SHEARED));
+  ent_remove(s);
+  for (int t = 0; t < MOB_GRASS_REGROW_TICKS + 20; t ++) tick();
+  int dirt = 0;
+  for (short x = 0; x < 40; x ++) for (short z = 0; z < 40; z ++) if (getBlockAt(x, FLOOR, z) == B_dirt) dirt ++;
+  CHECK(dirt == 0);
+}
+
 static void test_sheep_colours (void) {
   setup(B_grass_block);
   int white = 0, other = 0;
@@ -166,6 +180,7 @@ int main (void) {
   RUN(test_animals_take_half_the_table);
   RUN(test_baby_grows_after_24000);
   RUN(test_sheep_eats_grass_and_regrows);
+  RUN(test_grazed_grass_grows_back);
   RUN(test_sheep_colours);
   RUN(test_chicken_lays_eggs);
   RUN(test_grass_drops_seeds);

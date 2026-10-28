@@ -113,9 +113,15 @@ static void test_frozen_animal_does_not_tick (void) {
   // far from the player: past the simulation distance, but no animal ever despawns
   Entity *far = mob_spawn(E_cow, 105 * ENT_UNIT, 230 * ENT_UNIT, 5 * ENT_UNIT);       // in the air
   Entity *very = mob_spawn(E_cow, 400 * ENT_UNIT, 230 * ENT_UNIT, 5 * ENT_UNIT);
+  far->flags |= ENT_BABY;
+  far->u.mob.grow = MOB_GROW_TICKS - 10;
+  Entity *hen = mob_spawn(E_chicken, 300 * ENT_UNIT, 230 * ENT_UNIT, 5 * ENT_UNIT);
+  hen->u.mob.egg = 5;
   int32_t y0 = far->y;
   for (int t = 0; t < 100; t ++) { server_ticks ++; mobs_tick(); }
   CHECK(far->type == E_cow && far->y == y0);   // did not fall: not simulated
+  CHECK(far->flags & ENT_BABY);                 // nor grew up
+  CHECK(hen->u.mob.egg == 5);                   // nor laid
   CHECK(very->type == E_cow);                   // still there
 }
 

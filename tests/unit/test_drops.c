@@ -148,6 +148,21 @@ static void test_full_table_loses_nothing (void) {
   CHECK(p->inventory_items[0] == I_dirt && p->inventory_count[0] == 5);
 }
 
+// Nobody near, or nobody in the game: the item waits, as in an unloaded chunk
+static void test_item_waits_while_nobody_is_near (void) {
+  PlayerData *p = setup();
+  drop_item(I_dirt, 1, (int32_t)(5.5 * ENT_UNIT), (FLOOR + 1) * ENT_UNIT, (int32_t)(5.5 * ENT_UNIT), 0, 0, 0, 0);
+  p->x = 2000;
+  ticks(DROP_LIFETIME + 10);
+  CHECK(itemsOnGround() == 1);
+  p->client_fd = -1;                                     // gone from the server
+  ticks(DROP_LIFETIME + 10);
+  CHECK(itemsOnGround() == 1);
+  p->client_fd = 1000; p->x = 15;
+  ticks(DROP_LIFETIME + 2);
+  CHECK(itemsOnGround() == 0);
+}
+
 int main (void) {
   RUN(test_items_merge);
   RUN(test_despawn_after_6000);
@@ -157,5 +172,6 @@ int main (void) {
   RUN(test_resting_item_falls_when_floor_goes);
   RUN(test_full_table_lets_oldest_item_go);
   RUN(test_full_table_loses_nothing);
+  RUN(test_item_waits_while_nobody_is_near);
   return CHECK_DONE();
 }

@@ -44,6 +44,17 @@ uint8_t ent_kind_of (uint16_t type) {
 
 uint32_t ent_capacity (void) { return capacity; }
 uint32_t ent_count (void) { return used; }
+
+uint8_t ent_simulated (const Entity *e) {
+  double x = (double)e->x / ENT_UNIT, z = (double)e->z / ENT_UNIT;
+  for (int i = 0; i < MAX_PLAYERS; i ++) {
+    const PlayerData *p = &player_data[i];
+    if (p->client_fd == -1 || (p->flags & 0x20)) continue;
+    double dx = p->x + 0.5 - x, dz = p->z + 0.5 - z;
+    if (dx * dx + dz * dz <= ENT_SIM_DISTANCE * ENT_SIM_DISTANCE) return 1;
+  }
+  return 0;
+}
 Entity *ent_at (uint32_t index) { return index < capacity ? &table[index] : NULL; }
 int32_t ent_id (const Entity *e) { return e->id; }
 void ent_moved (Entity *e) { e->dirty = 1; }

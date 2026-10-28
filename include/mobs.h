@@ -15,7 +15,7 @@
 #define MOB_DESPAWN_FAR 128      // a hostile further than this from every player goes at once
 #define MOB_DESPAWN_NEAR 32      // further than this for MOB_ALONE_TICKS, it may go: 1 in 800 a tick
 #define MOB_ALONE_TICKS 600
-#define MOB_SIM_DISTANCE 64      // animals further than this from every player are frozen
+#define MOB_SIM_DISTANCE ENT_SIM_DISTANCE   // animals further than this from every player are frozen
 #define MOB_IDLE_PHYSICS_EVERY 4 // a mob standing still gets physics this often
 
 typedef enum { CAT_MONSTER, CAT_CREATURE, CAT_AMBIENT, CAT_WATER } MobCategory;
@@ -38,6 +38,7 @@ enum {
 #define MOB_LOVE_TICKS 600
 #define MOB_BREED_COOLDOWN 6000
 #define MOB_GROW_TICKS 24000
+#define MOB_GRASS_REGROW_TICKS 2400   // grass a sheep ate spreads back over the dirt in about 2 minutes
 #define MOB_BREED_LIMIT 32       // no breeding with this many animals within MOB_BREED_RANGE
 #define MOB_BREED_RANGE 64
 

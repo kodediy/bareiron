@@ -118,7 +118,7 @@ static void tryMerge (Entity *e) {
 void drops_tick (void) {
   for (uint32_t i = 0; i < ent_capacity(); i ++) {
     Entity *e = ent_at(i);
-    if (e->type != E_item) continue;
+    if (e->type != E_item || !ent_simulated(e)) continue;
     if (++ e->age > DROP_LIFETIME) { ent_remove(e); continue; }
     if (e->timer) e->timer --;
     // At rest on the ground it only needs looking at now and then (does its

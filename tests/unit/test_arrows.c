@@ -31,6 +31,10 @@ static void setup (void) {
   CHECK(ent_init(32) == 0);
   for (int i = 0; i < MAX_PLAYERS; i ++) player_data[i].client_fd = -1;
   for (short x = 0; x < 40; x ++) for (short z = 0; z < 10; z ++) makeBlockChange(x, FLOOR, z, B_stone);
+  // someone watching from off the platform: with nobody near, arrows wait
+  PlayerData *p = &player_data[0];
+  memset(p, 0, sizeof(*p));
+  p->client_fd = 1000; p->x = 20; p->y = FLOOR + 1; p->z = 30; p->health = 20;
   server_ticks = 0;
 }
 
@@ -79,6 +83,22 @@ static void test_arrow_sticks_in_block (void) {
   CHECK(a->x == x);                                       // and stays there
 }
 
+// Nobody near: a stuck arrow waits, as in an unloaded chunk
+static void test_stuck_arrow_waits_while_nobody_is_near (void) {
+  setup();
+  for (short y = FLOOR + 1; y <= FLOOR + 3; y ++) makeBlockChange(20, y, 5, B_stone);
+  Entity *a = arrow_shoot(-1, (int32_t)(2.5 * ENT_UNIT), (int32_t)((FLOOR + 2) * ENT_UNIT), (int32_t)(5.5 * ENT_UNIT),
+                          1, 0, 0, 3.0f, ARROW_BASE_DAMAGE, 1, ARROW_NO_EFFECT);
+  int32_t id = ent_id(a);
+  ticks(20);
+  player_data[0].x = 2000;                                // the player wanders off
+  ticks(ARROW_STUCK_LIFETIME + 20);
+  CHECK(ent_by_id(id) != NULL);
+  player_data[0].x = 20;                                  // and comes back
+  ticks(ARROW_STUCK_LIFETIME + 20);
+  CHECK(ent_by_id(id) == NULL);
+}
+
 static void test_bow_power (void) {
   CHECK(fabsf(bow_power(20) - 1.0f) < 1e-5f);    // a full second: full power
   CHECK(fabsf(bow_power(40) - 1.0f) < 1e-5f);
@@ -90,6 +110,7 @@ int main (void) {
   RUN(test_arrow_arc_matches_vanilla);
   RUN(test_arrow_hits_entity_in_path);
   RUN(test_arrow_sticks_in_block);
+  RUN(test_stuck_arrow_waits_while_nobody_is_near);
   RUN(test_bow_power);
   return CHECK_DONE();
 }
