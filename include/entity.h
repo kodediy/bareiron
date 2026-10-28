@@ -41,6 +41,8 @@ typedef struct Entity {
   uint8_t  yaw, pitch, head_yaw;  // 1/256 of a turn
   uint8_t  dirty;             // moved since the last network turn
   float    health;
+  float    last_damage;       // the hit that started its invulnerability
+  uint8_t  hurt_ticks;        // ticks of invulnerability left
   uint32_t age;               // ticks since it appeared
   uint16_t timer;             // kind's countdown: death, fuse, pickup delay
   uint64_t seen_by;           // bit i: player_data[i] has it spawned

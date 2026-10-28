@@ -23,6 +23,7 @@
 #include "entity.h"
 #include "entitymeta.h"
 #include "mobs.h"
+#include "combat.h"
 #include "spawning.h"
 
 int client_states[MAX_CONNECTIONS * 2];
@@ -198,6 +199,8 @@ void handlePlayerDisconnect (int client_fd) {
 
 // Marks a client as connected and broadcasts their data to other players
 void handlePlayerJoin (PlayerData* player) {
+
+  if (player->flags & 0x20) combat_forget_player(player);
 
   // Clients also report "loaded" after respawning; only the first one
   // after logging in is a join for the host
@@ -1445,149 +1448,9 @@ void interactEntity (int entity_id, int interactor_id) {
   }
 }
 
+// Damage of any kind; the rules are in combat.c
 void hurtEntity (int entity_id, int attacker_id, uint8_t damage_type, uint8_t damage) {
-
-  if (attacker_id > 0) { // Attacker is a player
-
-    PlayerData *player;
-    if (getPlayerData(attacker_id, &player)) return;
-
-    // Check if attack cooldown flag is set
-    if (player->flags & 0x01) return;
-
-    // Scale damage based on held item
-    uint16_t held_item = player->inventory_items[player->hotbar];
-    if (held_item == I_wooden_sword) damage *= 4;
-    else if (held_item == I_golden_sword) damage *= 4;
-    else if (held_item == I_stone_sword) damage *= 5;
-    else if (held_item == I_iron_sword) damage *= 6;
-    else if (held_item == I_diamond_sword) damage *= 7;
-    else if (held_item == I_netherite_sword) damage *= 8;
-
-    // Enable attack cooldown
-    player->flags |= 0x01;
-    player->flagval_8 = 0;
-
-  }
-
-  // Whether this attack caused the target entity to die
-  uint8_t entity_died = false;
-
-  if (entity_id > 0) { // The attacked entity is a player
-
-    PlayerData *player;
-    if (getPlayerData(entity_id, &player)) return;
-
-    // Don't continue if the player is already dead
-    if (player->health == 0) return;
-
-    // Calculate damage reduction from player's armor
-    uint8_t defense = getPlayerDefensePoints(player);
-    // This uses the old (pre-1.9) protection calculation. Factors are
-    // scaled up 256 times to avoid floating point math. Due to lost
-    // precision, the 4% reduction factor drops to ~3.9%, although the
-    // the resulting effective damage is then also rounded down.
-    uint8_t effective_damage = damage * (256 - defense * 10) / 256;
-
-    // Process health change on the server
-    if (player->health <= effective_damage) {
-
-      player->health = 0;
-      entity_died = true;
-
-      // Prepare death message in recv_buffer
-      uint8_t player_name_len = strlen(player->name);
-      strcpy((char *)recv_buffer, player->name);
-
-      if (damage_type == D_fall && damage > 8) {
-        // Killed by a greater than 5 block fall
-        strcpy((char *)recv_buffer + player_name_len, " fell from a high place");
-        recv_buffer[player_name_len + 23] = '\0';
-      } else if (damage_type == D_fall) {
-        // Killed by a less than 5 block fall
-        strcpy((char *)recv_buffer + player_name_len, " hit the ground too hard");
-        recv_buffer[player_name_len + 24] = '\0';
-      } else if (damage_type == D_lava) {
-        // Killed by being in lava
-        strcpy((char *)recv_buffer + player_name_len, " tried to swim in lava");
-        recv_buffer[player_name_len + 22] = '\0';
-      } else if (attacker_id < -1) {
-        // Killed by a mob
-        strcpy((char *)recv_buffer + player_name_len, " was slain by a mob");
-        recv_buffer[player_name_len + 19] = '\0';
-      } else if (attacker_id > 0) {
-        // Killed by a player
-        PlayerData *attacker;
-        if (getPlayerData(attacker_id, &attacker)) return;
-        strcpy((char *)recv_buffer + player_name_len, " was slain by ");
-        strcpy((char *)recv_buffer + player_name_len + 14, attacker->name);
-        recv_buffer[player_name_len + 14 + strlen(attacker->name)] = '\0';
-      } else if (damage_type == D_cactus) {
-        // Killed by being near a cactus
-        strcpy((char *)recv_buffer + player_name_len, " was pricked to death");
-        recv_buffer[player_name_len + 21] = '\0';
-      } else {
-        // Unknown death reason
-        strcpy((char *)recv_buffer + player_name_len, " died");
-        recv_buffer[player_name_len + 5] = '\0';
-      }
-
-    } else player->health -= effective_damage;
-
-    // Update health on the client
-    sc_setHealth(entity_id, player->health, player->hunger, player->saturation);
-
-  } else { // The attacked entity is a mob
-
-    Entity *mob = ent_by_id(entity_id);
-    if (!mob) return;
-
-    // Don't continue if the mob is already dead
-    if (mob->flags & ENT_DEAD) return;
-
-    // Panic, or turn on whoever hit it
-    mob_hurt_reaction(mob, attacker_id);
-
-    // Process health change on the server
-    if (mob->health <= damage) {
-
-      mob->health = 0;
-      mob->flags |= ENT_DEAD;
-      mob->timer = 0;   // counts the death animation's ticks
-      entity_died = true;
-
-      // Handle mob drops
-      if (attacker_id > 0) {
-        PlayerData *player;
-        if (getPlayerData(attacker_id, &player)) return;
-        switch (mob->type) {
-          case E_chicken: givePlayerItem(player, I_chicken, 1); break;
-          case E_cow: givePlayerItem(player, I_beef, 1 + (fast_rand() % 3)); break;
-          case E_pig: givePlayerItem(player, I_porkchop, 1 + (fast_rand() % 3)); break;
-          case E_sheep: givePlayerItem(player, I_mutton, 1 + (fast_rand() & 1)); break;
-          case E_zombie: givePlayerItem(player, I_rotten_flesh, (fast_rand() % 3)); break;
-          default: break;
-        }
-      }
-
-    } else mob->health -= damage;
-
-  }
-
-  // Broadcast damage event to all players
-  for (int i = 0; i < MAX_PLAYERS; i ++) {
-    int client_fd = player_data[i].client_fd;
-    if (client_fd == -1) continue;
-    sc_damageEvent(client_fd, entity_id, damage_type);
-    // Below this, handle death events
-    if (!entity_died) continue;
-    sc_entityEvent(client_fd, entity_id, 3);
-    if (entity_id >= 0) {
-      // If a player died, broadcast their death message
-      sc_systemChat(client_fd, (char *)recv_buffer, strlen((char *)recv_buffer));
-    }
-  }
-
+  combat_hurt(entity_id, attacker_id, damage_type, damage);
 }
 
 // Simulates events scheduled for regular intervals

@@ -28,6 +28,8 @@ PLAY_SET_TIME = 0x6A         # Update Time
 PLAY_TELEPORT_ENTITY = 0x76
 PLAY_ENTITY_POSITION_SYNC = 0x1F   # what bareiron sends for another player's move
 PLAY_ADD_ENTITY = 0x01
+PLAY_LOGIN = 0x2B
+PLAY_SET_ENTITY_MOTION = 0x5E
 PLAY_REMOVE_ENTITIES = 0x46
 PLAY_MOVE_ENTITY_POS = 0x2E
 PLAY_MOVE_ENTITY_POS_ROT = 0x2F
@@ -103,6 +105,9 @@ class Bot:
     self.entities = {}           # entity id -> {"type", "x", "y", "z"} for what is spawned
     self.duplicate_spawns = 0    # Spawn Entity for an id already spawned
     self.removed = []            # ids removed, in order
+    self.entity_id = None        # this bot's own entity id (Login)
+    self.motions = []            # (vx, vy, vz) blocks/tick the server set on this bot
+    self.health = None           # last Set Health
 
   # -- transport --------------------------------------------------------
 
@@ -216,6 +221,13 @@ class Bot:
         self.state = "play"
     elif self.state == "play":
       self.packet_times.setdefault(packet_id, []).append(time.monotonic())
+      if packet_id == PLAY_LOGIN:
+        self.entity_id = struct.unpack(">i", payload[:4])[0]
+      elif packet_id == PLAY_SET_ENTITY_MOTION:
+        eid, pos = read_varint(payload, 0)
+        if eid == self.entity_id:
+          vx, vy, vz = struct.unpack(">hhh", payload[pos:pos + 6])
+          self.motions.append((vx / 8000.0, vy / 8000.0, vz / 8000.0))
       if packet_id == PLAY_ADD_ENTITY:
         eid, pos = read_varint(payload, 0)
         pos += 16                               # uuid

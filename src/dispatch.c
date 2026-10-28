@@ -34,6 +34,7 @@
 #include "registries.h"
 #include "procedures.h"
 #include "spawning.h"
+#include "combat.h"
 #include "serialize.h"
 #include "dispatch.h"
 
@@ -202,6 +203,9 @@ void handlePacket (int client_fd, int length, int packet_id, int state) {
 
         PlayerData *player;
         if (getPlayerData(client_fd, &player)) break;
+
+        // On the ground or falling, for critical hits
+        if (packet_id == 0x1D || packet_id == 0x1E) combat_note_movement(player, y, on_ground);
 
         uint8_t block_feet = getBlockAt(player->x, player->y, player->z);
         uint8_t swimming = block_feet >= B_water && block_feet < B_water + 8;

@@ -37,6 +37,7 @@ typedef struct {
   uint16_t ambient_every;     // ticks, on average
   uint16_t food[3];           // I_* that tempt it; 0 = none
   uint8_t goals[8];           // GOAL_* in priority order, 0-terminated
+  uint8_t armor;              // armor points (a zombie has 2)
 } MobType;
 
 const MobType *mob_type (uint16_t entity_type);

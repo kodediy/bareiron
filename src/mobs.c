@@ -12,13 +12,14 @@
 #include "physics.h"
 #include "pathfind.h"
 #include "mobs.h"
+#include "combat.h"
 
 #define BODY(w, h) { w, h, 0.6f, 0.08f, 0.98f }
 
 // Vanilla's attributes (Normal difficulty)
 static const MobType types[] = {
   { E_zombie, CAT_MONSTER, 20, 0.23f, 3, 35, BODY(0.6f, 1.95f), S_entity_zombie_ambient, 160, { 0 },
-    { GOAL_FLOAT, GOAL_CHASE_MELEE, GOAL_WANDER, GOAL_LOOK_AT_PLAYER, 0 } },
+    { GOAL_FLOAT, GOAL_CHASE_MELEE, GOAL_WANDER, GOAL_LOOK_AT_PLAYER, 0 }, 2 },
   { E_cow, CAT_CREATURE, 10, 0.2f, 0, 16, BODY(0.9f, 1.4f), S_entity_cow_ambient, 160, { I_wheat },
     { GOAL_FLOAT, GOAL_PANIC, GOAL_TEMPT, GOAL_WANDER, GOAL_LOOK_AT_PLAYER, 0 } },
   { E_pig, CAT_CREATURE, 10, 0.25f, 0, 16, BODY(0.9f, 0.9f), S_entity_pig_ambient, 160, { I_carrot, I_potato, I_beetroot },
@@ -227,7 +228,8 @@ static void attack (Entity *e, const MobType *t, PlayerData *p) {
   double reach = (2 * t->body.width) * (2 * t->body.width) + 0.6;
   if (dx * dx + dz * dz > reach || fabs(dy) > 1.5 || e->u.mob.attack_cd) return;
   e->u.mob.attack_cd = ATTACK_COOLDOWN;
-  hurtEntity(p->client_fd, e->id, D_generic, (uint8_t)t->attack);
+  combat_hurt(p->client_fd, e->id, D_mob_attack, t->attack);
+  combat_knockback(p->client_fd, ex(e), ez(e), COMBAT_KNOCKBACK);
 }
 
 // Every tick: walk the path (or straight at a close target), attack, look
@@ -312,6 +314,7 @@ void mobs_tick (void) {
     if (!t) continue;
 
     if (e->u.mob.attack_cd) e->u.mob.attack_cd --;
+    if (e->hurt_ticks) e->hurt_ticks --;
     if (e->u.mob.path_wait) e->u.mob.path_wait --;
     if (e->u.mob.panic) e->u.mob.panic --;
     if (e->u.mob.look_ticks) e->u.mob.look_ticks --;
@@ -341,7 +344,7 @@ void mobs_tick (void) {
     // Hostiles burn in daylight above ground, once a second
     if (t->category == CAT_MONSTER && (world_time < 13000 || world_time > 23460) &&
         ey(e) > 48 && server_ticks % (uint32_t)TICKS_PER_SECOND == 0) {
-      hurtEntity(e->id, -1, D_on_fire, 2);
+      combat_hurt(e->id, -1, D_on_fire, 2);
       if (e->flags & ENT_DEAD) continue;
     }
 

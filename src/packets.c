@@ -19,6 +19,7 @@
 #include "tools.h"
 #include "varnum.h"
 #include "registries.h"
+#include "combat.h"
 #include "worldgen.h"
 #include "crafting.h"
 #include "procedures.h"
@@ -1040,6 +1041,21 @@ int sc_setHeadRotation (int client_fd, int id, uint8_t yaw) {
   return 0;
 }
 
+// S->C Set Entity Motion, in blocks per tick (sent as 1/8000)
+int sc_setEntityMotion (int client_fd, int entity_id, float vx, float vy, float vz) {
+  writeVarInt(client_fd, 1 + sizeVarInt(entity_id) + 6);
+  writeByte(client_fd, P_set_entity_motion);
+  writeVarInt(client_fd, entity_id);
+  float v[3] = { vx, vy, vz };
+  for (int i = 0; i < 3; i ++) {
+    float s = v[i] * 8000.0f;
+    if (s > 32767) s = 32767;
+    if (s < -32768) s = -32768;
+    writeUint16(client_fd, (uint16_t)(int16_t)s);
+  }
+  return 0;
+}
+
 // S->C Sound Entity: a registered sound played from an entity
 int sc_soundEntity (int client_fd, uint16_t sound, uint8_t category, int entity_id, float volume, float pitch) {
   writeVarInt(client_fd, 1 + sizeVarInt(sound + 1) + 1 + sizeVarInt(entity_id) + 4 + 4 + 8);
@@ -1313,7 +1329,8 @@ int cs_interact (int client_fd) {
   if (type == 0) { // Interact
     interactEntity(entity_id, client_fd);
   } else if (type == 1) { // Attack
-    hurtEntity(entity_id, client_fd, D_generic, 1);
+    PlayerData *attacker;
+    if (!getPlayerData(client_fd, &attacker)) combat_attack(attacker, entity_id);
   }
 
   return 0;
