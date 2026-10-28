@@ -372,7 +372,39 @@ uint8_t getTerrainAt (int x, int y, int z, ChunkAnchor anchor) {
 
 }
 
+// What getBlockAt computed, remembered: mobs ask for the same blocks tick
+// after tick, and on the Kode Dot working one out costs microseconds. Any
+// block change or new world bumps the generation, which forgets it all.
+#define BLOCK_CACHE_SIZE 4096
+typedef struct { int16_t x, z; uint8_t y, block; uint16_t gen; } CachedBlock;
+static CachedBlock *block_cache = NULL;
+static uint8_t block_cache_failed = false;
+static uint16_t block_cache_gen = 1;
+
+void blockCacheForget (void) {
+  if (++ block_cache_gen == 0) {   // wrapped: clear, so no old entry matches
+    if (block_cache) memset(block_cache, 0, BLOCK_CACHE_SIZE * sizeof(CachedBlock));
+    block_cache_gen = 1;
+  }
+}
+
 uint8_t getBlockAt (int x, int y, int z) {
+  if (y < 0 || y > 255 || x < -32768 || x > 32767 || z < -32768 || z > 32767) return getBlockAtUncached(x, y, z);
+  if (!block_cache) {
+    if (block_cache_failed || !platform) return getBlockAtUncached(x, y, z);
+    block_cache = platform->alloc_large(BLOCK_CACHE_SIZE * sizeof(CachedBlock));
+    if (!block_cache) { block_cache_failed = true; return getBlockAtUncached(x, y, z); }
+    memset(block_cache, 0, BLOCK_CACHE_SIZE * sizeof(CachedBlock));
+  }
+  unsigned h = ((unsigned)(x * 73856093) ^ (unsigned)(y * 19349663) ^ (unsigned)(z * 83492791)) & (BLOCK_CACHE_SIZE - 1);
+  CachedBlock *c = &block_cache[h];
+  if (c->gen == block_cache_gen && c->x == x && c->y == y && c->z == z) return c->block;
+  uint8_t b = getBlockAtUncached(x, y, z);
+  c->x = (int16_t)x; c->z = (int16_t)z; c->y = (uint8_t)y; c->block = b; c->gen = block_cache_gen;
+  return b;
+}
+
+uint8_t getBlockAtUncached (int x, int y, int z) {
 
   if (y < 0) return B_bedrock;
 

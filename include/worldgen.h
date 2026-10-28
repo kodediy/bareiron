@@ -22,7 +22,9 @@ uint8_t getChunkBiome (short x, short z);
 uint8_t getHeightAtFromHash (int rx, int rz, int _x, int _z, uint32_t chunk_hash, uint8_t biome);
 uint8_t getHeightAt (int x, int z);
 uint8_t getTerrainAt (int x, int y, int z, ChunkAnchor anchor);
-uint8_t getBlockAt (int x, int y, int z);
+uint8_t getBlockAt (int x, int y, int z);          // cached; see blockCacheForget
+uint8_t getBlockAtUncached (int x, int y, int z);  // worked out every time
+void blockCacheForget (void);                      // a block changed or the world did
 
 extern uint8_t chunk_section[4096];
 uint8_t buildChunkSection (int cx, int cy, int cz);

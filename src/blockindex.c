@@ -3,6 +3,7 @@
 #include "globals.h"
 #include "registries.h"
 #include "blockindex.h"
+#include "worldgen.h"
 
 // One chunk column and the block_changes entries that fall inside it
 typedef struct {
@@ -77,6 +78,7 @@ static int growColumns (void) {
 }
 
 int bc_index_init (uint32_t capacity) {
+  blockCacheForget();
   (void)capacity;
   freeColumns();
   free_hint = 0;
@@ -84,6 +86,7 @@ int bc_index_init (uint32_t capacity) {
 }
 
 void bc_index_free (void) {
+  blockCacheForget();
   freeColumns();
 }
 
@@ -103,6 +106,7 @@ static BcColumn *columnOf (int index, int create) {
 }
 
 void bc_on_set (int index) {
+  blockCacheForget();
   BcColumn *column = columnOf(index, true);
   if (!column) return;
   for (int i = 0; i < column->count; i ++) {
@@ -121,6 +125,7 @@ void bc_on_set (int index) {
 }
 
 void bc_on_clear (int index) {
+  blockCacheForget();
   if (index < free_hint) free_hint = index;
   BcColumn *column = columnOf(index, false);
   if (!column) return;
@@ -132,6 +137,7 @@ void bc_on_clear (int index) {
 }
 
 void bc_index_rebuild (void) {
+  blockCacheForget();
   for (uint32_t i = 0; i < columns_size; i ++) columns[i].count = 0;
   free_hint = 0;
   for (int i = 0; i < block_changes_count; i ++) {
