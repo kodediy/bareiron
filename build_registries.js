@@ -440,6 +440,15 @@ uint8_t I_to_B (uint16_t item) {
 }
 `;
 
+  // Entity types, sounds and mob effects (registries.json) and the play
+  // packets the server sends (packets.json), by their protocol ids
+  const reports = `${__dirname}/notchian/generated/reports`;
+  const registriesReport = JSON.parse(await fs.readFile(`${reports}/registries.json`, "utf8"));
+  const packetsReport = JSON.parse(await fs.readFile(`${reports}/packets.json`, "utf8"));
+  const defines = (prefix, entries) => Object.entries(entries)
+    .map(([name, entry]) => `#define ${prefix}${name.replace("minecraft:", "").replace(/[^A-Za-z0-9_]/g, "_")} ${entry.protocol_id}`)
+    .join("\n");
+
   const headerCode = `\
 #ifndef H_REGISTRIES
 #define H_REGISTRIES
@@ -466,6 +475,18 @@ ${biomes.map((c, i) => `#define W_${c} ${i}`).join("\n")}
 
 // Damage type identifiers
 ${registries["damage_type"].map((c, i) => `#define D_${c} ${i}`).join("\n")}
+
+// Entity type identifiers
+${defines("E_", registriesReport["minecraft:entity_type"].entries)}
+
+// Clientbound play packet identifiers
+${defines("P_", packetsReport["play"]["clientbound"])}
+
+// Sound event identifiers (dots as underscores)
+${defines("S_", registriesReport["minecraft:sound_event"].entries)}
+
+// Mob effect identifiers
+${defines("MEF_", registriesReport["minecraft:mob_effect"].entries)}
 
 #endif
 `;
