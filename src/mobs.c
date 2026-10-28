@@ -18,10 +18,12 @@
 #include "spawning.h"
 #include "arrows.h"
 #include "effects.h"
+#include "drops.h"
 
 #define BODY(w, h) { w, h, 0.6f, 0.08f, 0.98f, 0 }
 #define BODY_CLIMB(w, h) { w, h, 0.6f, 0.08f, 0.98f, 1 }
 #define ZOMBIE_GOALS { GOAL_FLOAT, GOAL_CHASE_MELEE, GOAL_WANDER, GOAL_LOOK_AT_PLAYER, 0 }
+#define ANIMAL_GOALS { GOAL_FLOAT, GOAL_PANIC, GOAL_BREED, GOAL_TEMPT, GOAL_WANDER, GOAL_LOOK_AT_PLAYER, 0 }
 #define SKELETON_GOALS { GOAL_FLOAT, GOAL_AVOID_SUN, GOAL_RANGED_BOW, GOAL_WANDER, GOAL_LOOK_AT_PLAYER, 0 }
 
 // Vanilla's attributes (Normal difficulty)
@@ -36,13 +38,13 @@ static const MobType types[] = {
   { E_creeper, CAT_MONSTER, 20, 0.25f, 0, 16, BODY(0.6f, 1.7f), 0, 160, { 0 },
     { GOAL_FLOAT, GOAL_SWELL, GOAL_CHASE_MELEE, GOAL_WANDER, GOAL_LOOK_AT_PLAYER, 0 }, 0, 0 },
   { E_cow, CAT_CREATURE, 10, 0.2f, 0, 16, BODY(0.9f, 1.4f), S_entity_cow_ambient, 160, { I_wheat },
-    { GOAL_FLOAT, GOAL_PANIC, GOAL_TEMPT, GOAL_WANDER, GOAL_LOOK_AT_PLAYER, 0 } },
+    ANIMAL_GOALS },
   { E_pig, CAT_CREATURE, 10, 0.25f, 0, 16, BODY(0.9f, 0.9f), S_entity_pig_ambient, 160, { I_carrot, I_potato, I_beetroot },
-    { GOAL_FLOAT, GOAL_PANIC, GOAL_TEMPT, GOAL_WANDER, GOAL_LOOK_AT_PLAYER, 0 } },
+    ANIMAL_GOALS },
   { E_sheep, CAT_CREATURE, 8, 0.23f, 0, 16, BODY(0.9f, 1.3f), S_entity_sheep_ambient, 160, { I_wheat },
-    { GOAL_FLOAT, GOAL_PANIC, GOAL_TEMPT, GOAL_WANDER, GOAL_LOOK_AT_PLAYER, 0 } },
+    ANIMAL_GOALS },
   { E_chicken, CAT_CREATURE, 4, 0.25f, 0, 16, BODY(0.4f, 0.7f), S_entity_chicken_ambient, 160, { I_wheat_seeds, I_melon_seeds, I_pumpkin_seeds },
-    { GOAL_FLOAT, GOAL_PANIC, GOAL_TEMPT, GOAL_WANDER, GOAL_LOOK_AT_PLAYER, 0 } },
+    ANIMAL_GOALS },
 };
 
 #define SPEED_WANDER 1.0f
@@ -67,8 +69,26 @@ static const MobType types[] = {
 #define PROVOKED_TICKS 200
 #define BABY_CHANCE 20             // 1 zombie in 20 is a baby
 #define BABY_SPEED 1.5f
+#define BREED_SEEK 8.0             // a partner within this many blocks
+#define BREED_TOUCH 3.0            // close enough to have the baby
+#define EAT_GRASS_ADULT 1000       // a sheep eats grass 1 tick in this many
+#define EAT_GRASS_BABY 50
+
+// Vanilla's sheep colours: white 81.836 %, light gray, gray and black 5 %
+// each, brown 3 %, pink 0.164 % (colour ids: 0 white, 8 light gray, 7 gray,
+// 15 black, 12 brown, 6 pink)
+static uint8_t sheepColour (void) {
+  uint32_t r = fast_rand() % 100000;
+  if (r < 81836) return 0;
+  if (r < 86836) return 8;
+  if (r < 91836) return 7;
+  if (r < 96836) return 15;
+  if (r < 99836) return 12;
+  return 6;
+}
 
 uint32_t mob_decisions_last_tick = 0;
+static void toTrackers (const Entity *e, void (*send)(const Entity *, int));
 static int path_budget;
 
 const MobType *mob_type (uint16_t entity_type) {
@@ -88,6 +108,9 @@ Entity *mob_spawn (uint16_t type, int32_t x, int32_t y, int32_t z) {
   if ((type == E_zombie || type == E_husk || type == E_zombie_villager) && fast_rand() % BABY_CHANCE == 0) {
     e->flags |= ENT_BABY;
   }
+  if (type == E_sheep) e->u.mob.wool = sheepColour();
+  if (type == E_chicken) e->u.mob.egg = 6000 + fast_rand() % 6000;
+  if (t->category == CAT_CREATURE) e->flags |= ENT_PERSISTENT;
   return e;
 }
 
@@ -203,6 +226,47 @@ static void steer (Entity *e, double dx, double dz, float speed) {
   e->yaw = e->head_yaw = yawToward(dx, dz);
 }
 
+static Entity *findPartner (const Entity *e) {
+  Entity *best = NULL;
+  double best_d = BREED_SEEK * BREED_SEEK;
+  for (uint32_t j = 0; j < ent_capacity(); j ++) {
+    Entity *o = ent_at(j);
+    if (o == e || o->type != e->type || !o->u.mob.love || o->u.mob.breed_cd || (o->flags & (ENT_BABY | ENT_DEAD))) continue;
+    double dx = ex(o) - ex(e), dz = ez(o) - ez(e), d = dx * dx + dz * dz;
+    if (d <= best_d) { best_d = d; best = o; }
+  }
+  return best;
+}
+
+static int animalsNear (const Entity *e) {
+  int n = 0;
+  for (uint32_t j = 0; j < ent_capacity(); j ++) {
+    Entity *o = ent_at(j);
+    if (o->type == 0 || o->kind != ENT_KIND_MOB) continue;
+    const MobType *t = mob_type(o->type);
+    if (!t || t->category != CAT_CREATURE) continue;
+    double dx = ex(o) - ex(e), dz = ez(o) - ez(e);
+    if (dx * dx + dz * dz <= MOB_BREED_RANGE * MOB_BREED_RANGE) n ++;
+  }
+  return n;
+}
+
+static void hearts (const Entity *e, int client_fd) { sc_entityEvent(client_fd, e->id, 18); }
+
+static void breed (Entity *a, Entity *b) {
+  a->u.mob.love = b->u.mob.love = 0;
+  a->u.mob.path_len = b->u.mob.path_len = 0;
+  // The design's one departure from vanilla: a crowded farm stops growing
+  if (animalsNear(a) >= MOB_BREED_LIMIT) return;
+  a->u.mob.breed_cd = b->u.mob.breed_cd = MOB_BREED_COOLDOWN;
+  Entity *baby = mob_spawn(a->type, (a->x + b->x) / 2, a->y, (a->z + b->z) / 2);
+  if (!baby) return;
+  baby->flags |= ENT_BABY;
+  baby->u.mob.grow = 0;
+  if (a->type == E_sheep) baby->u.mob.wool = (fast_rand() & 1) ? a->u.mob.wool : b->u.mob.wool;
+  toTrackers(a, hearts);
+}
+
 // Decides what the mob does next: its highest-priority goal that applies
 static void decide (Entity *e, const MobType *t) {
   mob_decisions_last_tick ++;
@@ -263,6 +327,20 @@ static void decide (Entity *e, const MobType *t) {
       return;
     }
     e->u.mob.target = -1;
+  }
+
+  if (hasGoal(t, GOAL_BREED) && e->u.mob.love && !e->u.mob.breed_cd && !(e->flags & ENT_BABY)) {
+    Entity *partner = findPartner(e);
+    if (partner) {
+      double dx = ex(partner) - ex(e), dz = ez(partner) - ez(e);
+      e->u.mob.goal = GOAL_BREED;
+      if (dx * dx + dz * dz <= BREED_TOUCH * BREED_TOUCH) {
+        breed(e, partner);
+      } else if (e->u.mob.path_i >= e->u.mob.path_len) {
+        requestPath(e, (int)floor(ex(partner)), (int)floor(ey(partner) + 0.01), (int)floor(ez(partner)));
+      }
+      return;
+    }
   }
 
   if (hasGoal(t, GOAL_TEMPT)) {
@@ -472,6 +550,63 @@ static void ambientSound (const Entity *e, const MobType *t) {
   }
 }
 
+uint8_t mob_feed (Entity *e, PlayerData *p) {
+  const MobType *t = mob_type(e->type);
+  if (!t || t->category != CAT_CREATURE || (e->flags & ENT_DEAD) || !holdsFood(p, t)) return 0;
+  if (e->flags & ENT_BABY) {
+    e->u.mob.grow += (MOB_GROW_TICKS - e->u.mob.grow) / 10;   // a fed baby grows a tenth of the way
+  } else {
+    if (e->u.mob.love || e->u.mob.breed_cd) return 0;
+    e->u.mob.love = MOB_LOVE_TICKS;
+    toTrackers(e, hearts);
+  }
+  uint8_t slot = p->hotbar;
+  if (GAMEMODE != 1 && -- p->inventory_count[slot] == 0) p->inventory_items[slot] = 0;
+  sc_setContainerSlot(p->client_fd, 0, serverSlotToClientSlot(0, slot), p->inventory_count[slot], p->inventory_items[slot]);
+  return 1;
+}
+
+static void sendWool (const Entity *e, int client_fd) {
+  EntityData wool = { META_SHEEP_WOOL, META_T_BYTE, { (uint8_t)((e->u.mob.wool & 0x0F) | ((e->flags & ENT_SHEARED) ? 0x10 : 0)) } };
+  sc_setEntityMetadata(client_fd, e->id, &wool, 1);
+}
+
+static void sendBaby (const Entity *e, int client_fd) {
+  EntityData baby = { META_BABY, META_T_BOOLEAN, { (uint8_t)((e->flags & ENT_BABY) ? 1 : 0) } };
+  sc_setEntityMetadata(client_fd, e->id, &baby, 1);
+}
+
+static void eatAnimation (const Entity *e, int client_fd) { sc_entityEvent(client_fd, e->id, 10); }
+
+static void cluck (const Entity *e, int client_fd) {
+  sc_soundEntity(client_fd, S_entity_chicken_egg, 6, e->id, 1.0f, 1.0f);
+}
+
+// An animal's day: growing up, sheep grazing, chickens laying
+static void animalLife (Entity *e) {
+  if (e->u.mob.love) e->u.mob.love --;
+  if (e->u.mob.breed_cd) e->u.mob.breed_cd --;
+  if (e->flags & ENT_BABY) {
+    if (++ e->u.mob.grow >= MOB_GROW_TICKS) {
+      e->flags &= ~ENT_BABY;
+      toTrackers(e, sendBaby);
+    }
+  }
+  if (e->type == E_sheep && fast_rand() % ((e->flags & ENT_BABY) ? EAT_GRASS_BABY : EAT_GRASS_ADULT) == 0) {
+    int x = (int)floor(ex(e)), y = (int)floor(ey(e) + 0.01), z = (int)floor(ez(e));
+    if (getBlockAt(x, y - 1, z) == B_grass_block && !makeBlockChange(x, y - 1, z, B_dirt)) {
+      toTrackers(e, eatAnimation);
+      if (e->flags & ENT_SHEARED) { e->flags &= ~ENT_SHEARED; toTrackers(e, sendWool); }
+      if (e->flags & ENT_BABY) e->u.mob.grow += 1200;   // a grazing lamb grows a minute
+    }
+  }
+  if (e->type == E_chicken && !(e->flags & ENT_BABY) && e->u.mob.egg && -- e->u.mob.egg == 0) {
+    drop_pop(I_egg, 1, ex(e), ey(e) + 0.3, ez(e));
+    toTrackers(e, cluck);
+    e->u.mob.egg = 6000 + fast_rand() % 6000;
+  }
+}
+
 void mob_send_extra (const Entity *e, int client_fd) {
   if (e->flags & ENT_BABY) {
     EntityData baby = { META_BABY, META_T_BOOLEAN, { 1 } };
@@ -480,10 +615,7 @@ void mob_send_extra (const Entity *e, int client_fd) {
   if (e->flags & ENT_ON_FIRE) sendFlags(e, client_fd);
   if (e->type == E_skeleton || e->type == E_stray) sc_setEquipment(client_fd, e->id, 0, I_bow, 1);
   if (e->type == E_creeper && e->u.mob.swell_dir > 0) sendCreeperState(e, client_fd);
-  if (e->type == E_sheep && (e->flags & ENT_SHEARED)) {
-    EntityData wool = { META_SHEEP_WOOL, META_T_BYTE, { (uint8_t)0x10 } };
-    sc_setEntityMetadata(client_fd, e->id, &wool, 1);
-  }
+  if (e->type == E_sheep) sendWool(e, client_fd);
 }
 
 void mob_hurt_reaction (Entity *e, int32_t attacker_id) {
@@ -533,6 +665,7 @@ void mobs_tick (void) {
     if (e->u.mob.panic) e->u.mob.panic --;
     if (e->u.mob.look_ticks) e->u.mob.look_ticks --;
     if (e->u.mob.provoked) e->u.mob.provoked --;
+    if (t->category == CAT_CREATURE) animalLife(e);
 
     // Far from every player: hostiles go, animals (for now) at twice that
     double d;
@@ -577,7 +710,9 @@ void mobs_tick (void) {
     if ((server_ticks + i) % MOB_DECIDE_EVERY == 0) decide(e, t);
     control(e, t);
     if (e->type == 0) continue;   // a creeper that went off
-    phys_step(e, &t->body);
+    PhysBody body = t->body;
+    if (e->flags & ENT_BABY) { body.width /= 2; body.height /= 2; }
+    phys_step(e, &body);
     ambientSound(e, t);
   }
 }

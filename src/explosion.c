@@ -194,6 +194,7 @@ Entity *tnt_prime (int32_t x, int32_t y, int32_t z, uint16_t fuse, int32_t lit_b
   e->vx = (float)(-sin(a) * 0.02);
   e->vz = (float)(-cos(a) * 0.02);
   e->vy = 0.2f;
+  ent_track_now(e);
   return e;
 }
 

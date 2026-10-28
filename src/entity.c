@@ -146,6 +146,10 @@ void ent_track_player (PlayerData *p) {
   }
 }
 
+void ent_track_now (Entity *e) {
+  for (int i = 0; i < MAX_PLAYERS; i ++) trackOne(&player_data[i], e);
+}
+
 void ent_untrack_player (PlayerData *p) {
   uint64_t bit = (uint64_t)1 << playerIndex(p);
   for (uint32_t j = 0; j < capacity; j ++) table[j].seen_by &= ~bit;

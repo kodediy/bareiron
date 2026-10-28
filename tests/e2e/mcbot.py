@@ -35,6 +35,7 @@ PLAY_SET_CONTAINER_SLOT = 0x14
 PLAY_EXPLODE = 0x20
 PLAY_SET_HEALTH = 0x61
 PLAY_SET_ENTITY_DATA = 0x5C
+PLAY_DAMAGE_EVENT = 0x19
 PLAY_REMOVE_ENTITIES = 0x46
 PLAY_MOVE_ENTITY_POS = 0x2E
 PLAY_MOVE_ENTITY_POS_ROT = 0x2F
@@ -50,6 +51,7 @@ SB_PLAY_SET_POSITION = 0x1D
 SB_PLAY_PLAYER_ACTION = 0x28
 SB_PLAY_PLAYER_LOADED = 0x2B
 SB_PLAY_USE_ITEM = 0x40
+SB_PLAY_CLIENT_COMMAND = 0x0B
 
 
 class Disconnected(Exception):
@@ -110,6 +112,7 @@ class Bot:
     self.time_of_day = []        # (monotonic, time of day) from Update Time
     self.entities = {}           # entity id -> {"type", "x", "y", "z"} for what is spawned
     self.duplicate_spawns = 0    # Spawn Entity for an id already spawned
+    self.spawn_log = []          # (entity id, type) of every Spawn Entity, in order
     self.removed = []            # ids removed, in order
     self.entity_id = None        # this bot's own entity id (Login)
     self.motions = []            # (vx, vy, vz) blocks/tick the server set on this bot
@@ -118,6 +121,8 @@ class Bot:
     self.slots = {}              # player inventory slot -> (item, count), from Set Container Slot
     self.explosions = []         # (x, y, z) of each Explosion
     self.metadata = []           # (entity id, raw payload) of each Set Entity Data
+    self.damage_types = []       # damage type ids of the hits this bot took
+    self.deaths = 0              # times it died (it respawns at once, as a client does)
 
   # -- transport --------------------------------------------------------
 
@@ -235,6 +240,13 @@ class Bot:
         self.explosions.append(struct.unpack(">ddd", payload[:24]))
       elif packet_id == PLAY_SET_HEALTH:
         self.health = struct.unpack(">f", payload[:4])[0]
+        if self.health <= 0:
+          self.deaths += 1
+          self.send(SB_PLAY_CLIENT_COMMAND, varint(0))   # Perform Respawn
+      elif packet_id == PLAY_DAMAGE_EVENT:
+        eid, pos = read_varint(payload, 0)
+        if eid == self.entity_id:
+          self.damage_types.append(read_varint(payload, pos)[0])
       elif packet_id == PLAY_SET_ENTITY_DATA:
         eid, pos = read_varint(payload, 0)
         self.metadata.append((eid, bytes(payload[pos:])))
@@ -265,6 +277,7 @@ class Bot:
         x, y, z = struct.unpack(">ddd", payload[pos:pos + 24])
         if eid in self.entities:
           self.duplicate_spawns += 1
+        self.spawn_log.append((eid, etype))
         self.entities[eid] = {"type": etype, "x": x, "y": y, "z": z}
       elif packet_id == PLAY_REMOVE_ENTITIES:
         count, pos = read_varint(payload, 0)

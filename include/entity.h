@@ -64,6 +64,10 @@ typedef struct Entity {
       uint8_t  fire;          // ticks left burning
       uint8_t  bow_ticks;     // ticks left drawing a bow
       uint16_t provoked;      // ticks it keeps fighting whoever hit it
+      uint16_t love;          // ticks left looking for a partner after being fed
+      uint16_t breed_cd;      // ticks before it may breed again
+      uint16_t grow;          // a baby's ticks so far; it grows up at MOB_GROW_TICKS
+      uint16_t egg;           // a chicken's ticks to its next egg
       PathNode path[8];       // the next steps of its path
     } mob;
     struct { uint16_t item; uint8_t count; } item;
@@ -92,6 +96,7 @@ uint32_t ent_count (void);              // slots in use
 void     ent_moved (Entity *e);         // mark for the next network turn
 void     ent_network_tick (void);       // each tick; works every ENT_NETWORK_EVERY
 void     ent_track_player (PlayerData *p);   // spawn what it should see, remove what it should not
+void     ent_track_now (Entity *e);         // spawn a new entity to its viewers now, not at the next turn
 void     ent_untrack_player (PlayerData *p); // it left: forget it, sends nothing
 uint8_t  ent_kind_of (uint16_t type);
 

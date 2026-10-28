@@ -643,6 +643,11 @@ uint16_t getMiningResult (uint16_t held_item, uint8_t block) {
 
   switch (block) {
 
+    case B_short_grass:
+      // Shears keep it; otherwise wheat seeds 1 time in 8, as in vanilla
+      if (held_item == I_shears) return I_short_grass;
+      return fast_rand() % 8 == 0 ? I_wheat_seeds : 0;
+
     case B_oak_leaves:
       if (held_item == I_shears) return I_oak_leaves;
       uint32_t r = fast_rand();
@@ -1439,6 +1444,9 @@ void interactEntity (int entity_id, int interactor_id) {
   Entity *mob = ent_by_id(entity_id);
   if (!mob) return;
 
+  // An animal's food in hand: it eats it (love, or a baby grows)
+  if (mob_feed(mob, player)) return;
+
   switch (mob->type) {
     case E_sheep:
       if (player->inventory_items[player->hotbar] != I_shears)
@@ -1451,8 +1459,13 @@ void interactEntity (int entity_id, int interactor_id) {
 
       bumpToolDurability(player);
 
-      // 1 to 3 wool pops out, as in vanilla
-      drop_pop(I_white_wool, 1 + fast_rand() % 3,
+      // 1 to 3 wool of its colour pops out, as in vanilla
+      static const uint16_t wool[16] = {
+        I_white_wool, I_orange_wool, I_magenta_wool, I_light_blue_wool, I_yellow_wool, I_lime_wool,
+        I_pink_wool, I_gray_wool, I_light_gray_wool, I_cyan_wool, I_purple_wool, I_blue_wool,
+        I_brown_wool, I_green_wool, I_red_wool, I_black_wool
+      };
+      drop_pop(wool[mob->u.mob.wool & 15], 1 + fast_rand() % 3,
         (double)mob->x / ENT_UNIT, (double)mob->y / ENT_UNIT + 1, (double)mob->z / ENT_UNIT);
 
       for (int i = 0; i < MAX_PLAYERS; i ++) {

@@ -30,7 +30,14 @@ enum {
   GOAL_RANGED_BOW,      // keep within 15 blocks in sight and shoot every 40 ticks
   GOAL_LEAP,            // jump at a target 2 to 4 blocks away
   GOAL_AVOID_SUN,       // burning by day: look for shade
+  GOAL_BREED,           // fed: find a partner nearby and have a baby
 };
+
+#define MOB_LOVE_TICKS 600
+#define MOB_BREED_COOLDOWN 6000
+#define MOB_GROW_TICKS 24000
+#define MOB_BREED_LIMIT 32       // no breeding with this many animals within MOB_BREED_RANGE
+#define MOB_BREED_RANGE 64
 
 typedef struct {
   uint16_t type;              // E_*
@@ -50,6 +57,7 @@ Entity *mob_spawn (uint16_t type, int32_t x, int32_t y, int32_t z); // sets heal
 void mobs_tick (void);
 void mob_hurt_reaction (Entity *e, int32_t attacker_id);   // a hit: panic or fight back
 void mob_send_extra (const Entity *e, int client_fd);      // metadata and equipment for a new tracker
+uint8_t mob_feed (Entity *e, PlayerData *p);               // its food in hand: love, or a baby grows; 1 if eaten
 
 // How many mobs decided in the last mobs_tick (for the stagger test and the bench)
 extern uint32_t mob_decisions_last_tick;

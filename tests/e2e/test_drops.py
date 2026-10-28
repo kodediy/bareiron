@@ -41,14 +41,15 @@ class DropsTest(unittest.TestCase):
       bot.move_to(x, y - 1, z)
       bot.pump(1.5)                       # picks the block up
       self.assertTrue(bot.pickups)
-      before = set(items(bot))
+      mark = len(bot.spawn_log)
       bot.move_to(x, y + 40, z)           # up, then a fall that kills
       bot.pump(0.2)
       bot.move_to(x, y - 1, z)
       bot.pump(0.1)
       bot.move_to(x, y - 1, z)            # bareiron counts the fall on the next report from the ground
       bot.pump(1.0)
-      self.assertTrue(set(items(bot)) - before, "what it carried should drop where it died")
+      # It respawns at once and may pick it up again: what counts is that it dropped
+      self.assertTrue([e for e, t in bot.spawn_log[mark:] if t == ITEM], "what it carried should drop where it died")
       bot.close()
 
 

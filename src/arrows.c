@@ -45,6 +45,7 @@ Entity *arrow_shoot (int32_t shooter_id, int32_t x, int32_t y, int32_t z,
   faceVelocity(e);
   e->sent_yaw = e->yaw;
   e->sent_pitch = e->pitch;
+  ent_track_now(e);   // it may hit before the next network turn
   return e;
 }
 

@@ -11,6 +11,7 @@
 #include "registries.h"
 #include "entity.h"
 #include "net.h"
+#include "arrows.h"
 
 static int far_end = -1;
 
@@ -158,10 +159,22 @@ static void test_out_of_range_is_removed (void) {
   CHECK(spawns == 1);
 }
 
+// An arrow can hit within a network turn: whoever sees the spot gets it at once
+static void test_fast_entity_is_spawned_at_once (void) {
+  setup(16);
+  Packet pk[64];
+  received(pk, 64);
+  arrow_shoot(-1, 8 * ENT_UNIT, 71 * ENT_UNIT, 8 * ENT_UNIT, 1, 0, 0, 1.6f, 2.0f, 0, ARROW_NO_EFFECT);
+  int n = received(pk, 64), spawned = 0;
+  for (int i = 0; i < n; i ++) if (pk[i].id == P_add_entity) spawned ++;
+  CHECK(spawned == 1);
+}
+
 int main (void) {
   RUN(test_ids_never_collide_with_players);
   RUN(test_entity_table_full);
   RUN(test_delta_or_teleport);
   RUN(test_out_of_range_is_removed);
+  RUN(test_fast_entity_is_spawned_at_once);
   return CHECK_DONE();
 }

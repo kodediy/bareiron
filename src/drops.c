@@ -44,6 +44,7 @@ Entity *drop_item (uint16_t item, uint8_t count, int32_t x, int32_t y, int32_t z
   e->vx = vx; e->vy = vy; e->vz = vz;
   e->timer = pickup_delay;
   e->flags |= ENT_PERSISTENT;
+  ent_track_now(e);
   return e;
 }
 
@@ -158,7 +159,14 @@ void drop_loot (const Entity *mob, int32_t killer_id) {
       POP(I_porkchop, 1 + r % 3);
       break;
     case E_sheep:
-      if (!(mob->flags & ENT_SHEARED)) POP(I_white_wool, 1);
+      if (!(mob->flags & ENT_SHEARED)) {
+        static const uint16_t wool[16] = {
+          I_white_wool, I_orange_wool, I_magenta_wool, I_light_blue_wool, I_yellow_wool, I_lime_wool,
+          I_pink_wool, I_gray_wool, I_light_gray_wool, I_cyan_wool, I_purple_wool, I_blue_wool,
+          I_brown_wool, I_green_wool, I_red_wool, I_black_wool
+        };
+        POP(wool[mob->u.mob.wool & 15], 1);
+      }
       POP(I_mutton, 1 + (r & 1));
       break;
     case E_chicken:
