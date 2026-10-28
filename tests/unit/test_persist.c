@@ -66,7 +66,7 @@ static void test_animals_round_trip (void) {
   sheep->u.mob.wool = 7;
   sheep->flags |= ENT_SHEARED;
   sheep->health = 5;
-  drop_item(I_dirt, 5, 10 * ENT_UNIT, (FLOOR + 1) * ENT_UNIT, 10 * ENT_UNIT, 0, 0, 0, 0);
+  drop_item(I_dirt, 5, 10 * ENT_UNIT, (FLOOR + 1) * ENT_UNIT, 10 * ENT_UNIT, 0, 0, 0, 0)->flags |= ENT_KEEP;   // a death pile
   mob_spawn(E_zombie, 12 * ENT_UNIT, (FLOOR + 1) * ENT_UNIT, 12 * ENT_UNIT);   // hostiles are not saved
   int32_t cx = cow->x, cz = cow->z;
 
@@ -85,6 +85,7 @@ static void test_animals_round_trip (void) {
   CHECK((cow->flags & ENT_BABY) && cow->u.mob.grow == 1000);
   CHECK(sheep->u.mob.wool == 7 && (sheep->flags & ENT_SHEARED) && sheep->health == 5);
   CHECK(item->u.item.item == I_dirt && item->u.item.count == 5);
+  CHECK(item->flags & ENT_KEEP);
 }
 
 static void test_bed_spawn_round_trip (void) {

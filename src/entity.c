@@ -56,17 +56,18 @@ Entity *ent_by_id (int32_t id) {
   return NULL;
 }
 
-// A free slot; for a mob, the oldest item on the ground gives way when
-// there is none. Arrows, items and TNT never push anything out.
+// A free slot; for a mob or an item, the oldest item on the ground gives
+// way when there is none, as if it had despawned. What a player dropped on
+// dying never does. Arrows and TNT never push anything out.
 static Entity *freeSlot (uint8_t kind) {
   Entity *oldest_item = NULL;
   for (uint32_t i = 0; i < capacity; i ++) {
     if (table[i].type == 0) return &table[i];
-    if (table[i].kind == ENT_KIND_ITEM && (!oldest_item || table[i].age > oldest_item->age)) {
+    if (table[i].kind == ENT_KIND_ITEM && !(table[i].flags & ENT_KEEP) && (!oldest_item || table[i].age > oldest_item->age)) {
       oldest_item = &table[i];
     }
   }
-  if (kind != ENT_KIND_MOB || !oldest_item) return NULL;
+  if ((kind != ENT_KIND_MOB && kind != ENT_KIND_ITEM) || !oldest_item) return NULL;
   ent_remove(oldest_item);
   return oldest_item;
 }

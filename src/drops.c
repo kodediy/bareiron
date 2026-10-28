@@ -108,6 +108,7 @@ static void tryMerge (Entity *e) {
     e->u.item.count += o->u.item.count;
     if (o->age < e->age) e->age = o->age;   // the younger one's time to live
     if (o->timer > e->timer) e->timer = o->timer;
+    e->flags |= o->flags & ENT_KEEP;
     ent_remove(o);
     broadcastItemMeta(e);
     if (e->u.item.count >= stack) return;
@@ -182,18 +183,27 @@ void drop_loot (const Entity *mob, int32_t killer_id) {
   #undef POP
 }
 
+// Kept from the table's pushing out; with no room at all, the stack stays
+// with the player rather than being lost
+static uint8_t spill (uint16_t item, uint8_t count, double x, double y, double z) {
+  Entity *e = drop_pop(item, count, x, y, z);
+  if (!e) return 0;
+  e->flags |= ENT_KEEP;
+  return 1;
+}
+
 void drops_spill_inventory (PlayerData *p) {
   double x = p->x + 0.5, y = p->y + 1.0, z = p->z + 0.5;
   for (int i = 0; i < 41; i ++) {
     if (!p->inventory_count[i]) continue;
-    drop_pop(p->inventory_items[i], p->inventory_count[i], x, y, z);
+    if (!spill(p->inventory_items[i], p->inventory_count[i], x, y, z)) continue;
     p->inventory_items[i] = 0;
     p->inventory_count[i] = 0;
     sc_setContainerSlot(p->client_fd, 0, serverSlotToClientSlot(0, i), 0, 0);
   }
   for (int i = 0; i < 9; i ++) {
     if (!p->craft_count[i]) continue;
-    drop_pop(p->craft_items[i], p->craft_count[i], x, y, z);
+    if (!spill(p->craft_items[i], p->craft_count[i], x, y, z)) continue;
     p->craft_items[i] = 0;
     p->craft_count[i] = 0;
   }
@@ -207,9 +217,13 @@ void drops_throw (PlayerData *p, uint8_t whole_stack) {
   // From the eyes, along the look, as vanilla throws it
   double yaw = p->yaw * M_PI / 127.0, pitch = p->pitch * (M_PI / 2) / 127.0;
   float dx = (float)(-sin(yaw) * cos(pitch)), dy = (float)(-sin(pitch)), dz = (float)(cos(yaw) * cos(pitch));
-  drop_item(item, n,
+  Entity *e = drop_item(item, n,
     (int32_t)((p->x + 0.5) * ENT_UNIT), (int32_t)((p->y + 1.32) * ENT_UNIT), (int32_t)((p->z + 0.5) * ENT_UNIT),
     dx * 0.3f, dy * 0.3f + 0.1f, dz * 0.3f, DROP_THROWN_DELAY);
+  if (!e) {   // no room anywhere: it stays in the hand
+    sc_setContainerSlot(p->client_fd, 0, serverSlotToClientSlot(0, slot), p->inventory_count[slot], item);
+    return;
+  }
   p->inventory_count[slot] -= n;
   if (!p->inventory_count[slot]) p->inventory_items[slot] = 0;
   sc_setContainerSlot(p->client_fd, 0, serverSlotToClientSlot(0, slot), p->inventory_count[slot], p->inventory_items[slot]);

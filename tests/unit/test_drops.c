@@ -110,6 +110,44 @@ static void test_resting_item_falls_when_floor_goes (void) {
   CHECK(e->y < (FLOOR + 1) * ENT_UNIT);
 }
 
+static void fillWithItems (void) {
+  for (uint32_t i = 0; ent_count() < ent_capacity(); i ++) {
+    Entity *e = drop_item(I_stone, 1, (int32_t)((i % 20) * ENT_UNIT), (FLOOR + 1) * ENT_UNIT, (int32_t)((i / 20) * ENT_UNIT), 0, 0, 0, 0);
+    CHECK(e != NULL);
+    e->age = i;
+  }
+}
+
+// A full table makes room by letting the oldest item go, as if it had
+// despawned, but never what a player dropped when it died
+static void test_full_table_lets_oldest_item_go (void) {
+  PlayerData *p = setup();
+  p->inventory_items[0] = I_diamond; p->inventory_count[0] = 3;
+  drops_spill_inventory(p);
+  Entity *pile = NULL;
+  for (uint32_t i = 0; i < ent_capacity(); i ++) if (ent_at(i)->type == E_item) pile = ent_at(i);
+  CHECK(pile && (pile->flags & ENT_KEEP));
+  fillWithItems();
+  pile->age = 100000;                          // the oldest of all
+  uint32_t second = 0;
+  for (uint32_t i = 0; i < ent_capacity(); i ++) if (ent_at(i) != pile && ent_at(i)->age > second) second = ent_at(i)->age;
+  Entity *e = drop_item(I_dirt, 1, 5 * ENT_UNIT, (FLOOR + 1) * ENT_UNIT, 5 * ENT_UNIT, 0, 0, 0, 0);
+  CHECK(e != NULL);
+  CHECK(pile->type == E_item && pile->u.item.item == I_diamond);
+  for (uint32_t i = 0; i < ent_capacity(); i ++) CHECK(ent_at(i)->age != second || ent_at(i) == e);
+}
+
+// With no room at all, what the player had stays with it
+static void test_full_table_loses_nothing (void) {
+  PlayerData *p = setup();
+  while (ent_count() < ent_capacity()) CHECK(ent_spawn(E_zombie, 0, (FLOOR + 1) * ENT_UNIT, 0) != NULL);
+  p->inventory_items[0] = I_dirt; p->inventory_count[0] = 5;
+  drops_throw(p, 1);
+  CHECK(p->inventory_items[0] == I_dirt && p->inventory_count[0] == 5);
+  drops_spill_inventory(p);
+  CHECK(p->inventory_items[0] == I_dirt && p->inventory_count[0] == 5);
+}
+
 int main (void) {
   RUN(test_items_merge);
   RUN(test_despawn_after_6000);
@@ -117,5 +155,7 @@ int main (void) {
   RUN(test_full_inventory_leaves_item);
   RUN(test_spill_on_death);
   RUN(test_resting_item_falls_when_floor_goes);
+  RUN(test_full_table_lets_oldest_item_go);
+  RUN(test_full_table_loses_nothing);
   return CHECK_DONE();
 }

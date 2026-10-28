@@ -24,6 +24,7 @@
 #define ENT_PERSISTENT 0x10
 #define ENT_SHEARED    0x20
 #define ENT_DEAD       0x40
+#define ENT_KEEP       0x80         // what a player dropped on dying: never pushed out of the table
 
 // kinds
 #define ENT_KIND_MOB   1

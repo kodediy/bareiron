@@ -10,6 +10,7 @@
 #include "procedures.h"
 #include "entity.h"
 #include "mobs.h"
+#include "spawning.h"
 #include "drops.h"
 #include "worldgen.h"
 
@@ -90,6 +91,22 @@ static void test_breeding_limit_32 (void) {
   CHECK(babies(E_cow) == 0);                    // 34 animals within 64 blocks: no more
 }
 
+// Animals never despawn, so half the entity table is all they may take
+static void test_animals_take_half_the_table (void) {
+  PlayerData *p = setup(B_grass_block);
+  for (int i = 0; i < 62; i ++) cowAt(5000.5 + (i % 8) * 100, 5000.5 + (i / 8) * 100);   // far away, frozen
+  Entity *a = cowAt(10.5, 10.5), *b = cowAt(12.5, 10.5);
+  feed(a, p, I_wheat);
+  feed(b, p, I_wheat);
+  for (int t = 0; t < 600; t ++) tick();
+  CHECK(babies(E_cow) == 0);
+  CHECK(a->u.mob.breed_cd == 0);                // no calf, so no wait either
+  for (int cx = -40; cx < 40; cx ++) for (int cz = -40; cz < 40; cz ++) spawn_chunk_creatures((short)cx, (short)cz);
+  int animals = 0;
+  for (uint32_t i = 0; i < ent_capacity(); i ++) if (ent_at(i)->kind == ENT_KIND_MOB) animals ++;
+  CHECK(animals <= (int)ent_capacity() / 2);
+}
+
 static void test_baby_grows_after_24000 (void) {
   setup(B_grass_block);
   Entity *calf = cowAt(10.5, 10.5);
@@ -146,6 +163,7 @@ static void test_grass_drops_seeds (void) {
 int main (void) {
   RUN(test_two_fed_cows_have_a_calf);
   RUN(test_breeding_limit_32);
+  RUN(test_animals_take_half_the_table);
   RUN(test_baby_grows_after_24000);
   RUN(test_sheep_eats_grass_and_regrows);
   RUN(test_sheep_colours);

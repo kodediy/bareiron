@@ -153,7 +153,7 @@ int worldSnapshotRead (const uint8_t *src, size_t len) {
       extra += sizeof(save);
       Entity *e = ent_spawn(save.type, save.x, save.y, save.z);
       if (!e) continue;
-      e->flags = save.flags & (ENT_BABY | ENT_SHEARED | ENT_PERSISTENT);
+      e->flags = save.flags & (ENT_BABY | ENT_SHEARED | ENT_PERSISTENT | ENT_KEEP);
       e->yaw = e->head_yaw = e->sent_yaw = e->sent_head = save.yaw;
       e->health = save.health;
       e->age = save.age;

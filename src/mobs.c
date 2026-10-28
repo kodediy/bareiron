@@ -257,10 +257,10 @@ static void breed (Entity *a, Entity *b) {
   a->u.mob.love = b->u.mob.love = 0;
   a->u.mob.path_len = b->u.mob.path_len = 0;
   // The design's one departure from vanilla: a crowded farm stops growing
-  if (animalsNear(a) >= MOB_BREED_LIMIT) return;
-  a->u.mob.breed_cd = b->u.mob.breed_cd = MOB_BREED_COOLDOWN;
+  if (animalsNear(a) >= MOB_BREED_LIMIT || !spawn_creature_room()) return;
   Entity *baby = mob_spawn(a->type, (a->x + b->x) / 2, a->y, (a->z + b->z) / 2);
   if (!baby) return;
+  a->u.mob.breed_cd = b->u.mob.breed_cd = MOB_BREED_COOLDOWN;
   baby->flags |= ENT_BABY;
   baby->u.mob.grow = 0;
   if (a->type == E_sheep) baby->u.mob.wool = (fast_rand() & 1) ? a->u.mob.wool : b->u.mob.wool;

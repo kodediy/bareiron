@@ -30,5 +30,6 @@ uint16_t spawn_pick_type (MobCategory category, uint8_t biome);
 uint8_t spawn_biome_at (short x, short z);
 void spawn_tick (void);                              // monster attempts around each player
 void spawn_chunk_creatures (short cx, short cz);     // a chunk sent for the first time in a while
+uint8_t spawn_creature_room (void);                  // animals never despawn: they may take half the entity table
 
 #endif

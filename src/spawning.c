@@ -209,9 +209,16 @@ static void tryMonsters (const PlayerData *p) {
   }
 }
 
+uint8_t spawn_creature_room (void) {
+  int global;
+  countNear(CAT_CREATURE, 0, 0, &global);
+  return global < (int)ent_capacity() / 2;
+}
+
 static void tryCreatures (double cx, double cz, int x, int z) {
-  int near = countNear(CAT_CREATURE, cx, cz, NULL);
-  if (near >= CAP_CREATURE) return;
+  int global;
+  int near = countNear(CAT_CREATURE, cx, cz, &global);
+  if (near >= CAP_CREATURE || global >= (int)ent_capacity() / 2) return;
   uint16_t type = spawn_pick_type(CAT_CREATURE, spawn_biome_at(x, z));
   if (!type || !mob_type(type)) return;
   spawnGroup(CAT_CREATURE, type, x, 0, z, 1, CAP_CREATURE - near);
