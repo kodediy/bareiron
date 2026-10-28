@@ -99,11 +99,23 @@ static void test_spill_on_death (void) {
   CHECK(itemsOnGround() == 2);
 }
 
+// An item at rest is checked less often, but still falls when its floor goes
+static void test_resting_item_falls_when_floor_goes (void) {
+  setup();
+  Entity *e = drop_item(I_dirt, 1, (int32_t)(5.5 * ENT_UNIT), (FLOOR + 1) * ENT_UNIT, (int32_t)(5.5 * ENT_UNIT), 0, 0, 0, 0);
+  ticks(40);
+  CHECK(e->y == (FLOOR + 1) * ENT_UNIT);
+  makeBlockChange(5, FLOOR, 5, B_air);
+  ticks(20);
+  CHECK(e->y < (FLOOR + 1) * ENT_UNIT);
+}
+
 int main (void) {
   RUN(test_items_merge);
   RUN(test_despawn_after_6000);
   RUN(test_pickup_respects_delay);
   RUN(test_full_inventory_leaves_item);
   RUN(test_spill_on_death);
+  RUN(test_resting_item_falls_when_floor_goes);
   return CHECK_DONE();
 }

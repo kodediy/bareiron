@@ -15,6 +15,7 @@
 static const PhysBody item_body = { 0.25f, 0.25f, 0.0f, 0.04f, 0.98f, 0 };
 
 #define MERGE_EVERY 10
+#define RESTING_EVERY 10
 
 static void sendItemMeta (const Entity *e, int client_fd) {
   EntityData meta = { META_ITEM, META_T_SLOT, { 0 } };
@@ -119,7 +120,10 @@ void drops_tick (void) {
     if (e->type != E_item) continue;
     if (++ e->age > DROP_LIFETIME) { ent_remove(e); continue; }
     if (e->timer) e->timer --;
-    phys_step(e, &item_body);
+    // At rest on the ground it only needs looking at now and then (does its
+    // floor still hold it?): every RESTING_EVERY ticks, staggered
+    uint8_t resting = (e->flags & ENT_ON_GROUND) && fabsf(e->vx) < 1e-3f && fabsf(e->vz) < 1e-3f;
+    if (!resting || (server_ticks + i) % RESTING_EVERY == 0) phys_step(e, &item_body);
     if ((server_ticks + i) % MERGE_EVERY == 0) tryMerge(e);
     if (e->type == E_item) tryPickup(e);
   }

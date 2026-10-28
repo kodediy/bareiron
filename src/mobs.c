@@ -716,7 +716,11 @@ void mobs_tick (void) {
     if (e->type == 0) continue;   // a creeper that went off
     PhysBody body = t->body;
     if (e->flags & ENT_BABY) { body.width /= 2; body.height /= 2; }
-    phys_step(e, &body);
+    // Standing still on dry ground with nowhere to go: physics every few ticks
+    uint8_t idle = (e->flags & ENT_ON_GROUND) && !(e->flags & ENT_IN_WATER) &&
+                   e->u.mob.path_i >= e->u.mob.path_len &&
+                   fabsf(e->vx) < 1e-3f && fabsf(e->vz) < 1e-3f;
+    if (!idle || (server_ticks + i) % MOB_IDLE_PHYSICS_EVERY == 0) phys_step(e, &body);
     ambientSound(e, t);
   }
 }
