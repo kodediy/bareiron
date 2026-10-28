@@ -107,11 +107,10 @@ static int floorChunk (int32_t block) {
   return block >= 0 ? block / 16 : -((15 - block) / 16);
 }
 
-// Whether a player should have this entity spawned: online, loaded, within
-// its view distance in chunks, and the entity not on its way out
+// Whether a player should have this entity: online, loaded and within its
+// view distance in chunks
 static int shouldSee (const PlayerData *p, const Entity *e) {
   if (p->client_fd == -1 || (p->flags & 0x20)) return 0;
-  if (e->flags & ENT_DEAD) return 0;
   int ecx = floorChunk(e->sent_x >> 12), ecz = floorChunk(e->sent_z >> 12);
   int pcx = floorChunk(p->x), pcz = floorChunk(p->z);
   return abs(ecx - pcx) <= VIEW_DISTANCE && abs(ecz - pcz) <= VIEW_DISTANCE;
@@ -131,7 +130,8 @@ static void trackOne (PlayerData *p, Entity *e) {
   uint64_t bit = (uint64_t)1 << i;
   int sees = (e->seen_by & bit) != 0;
   int should = shouldSee(p, e);
-  if (should && !sees) {
+  // A dying mob stays with whoever saw it fall, but nobody new is shown it
+  if (should && !sees && !(e->flags & ENT_DEAD)) {
     spawnFor(e, p->client_fd);
     e->seen_by |= bit;
   } else if (!should && sees) {

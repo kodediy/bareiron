@@ -170,11 +170,34 @@ static void test_fast_entity_is_spawned_at_once (void) {
   CHECK(spawned == 1);
 }
 
+// A mob that dies stays seen while it falls over; only new watchers skip it
+static void test_dying_mob_stays_for_animation (void) {
+  PlayerData *p = setup(16);
+  Packet pk[64];
+  Entity *a = ent_spawn(E_zombie, 8 * ENT_UNIT, 70 * ENT_UNIT, 8 * ENT_UNIT);
+  network_turn();
+  received(pk, 64);
+  a->flags |= ENT_DEAD;                  // what hurtMob does on a kill
+  network_turn();
+  int n = received(pk, 64), removes = 0;
+  for (int i = 0; i < n; i ++) if (pk[i].id == P_remove_entities) removes ++;
+  CHECK(removes == 0);
+  CHECK(a->seen_by & 1);
+  a->seen_by = 0;                        // someone who never saw it alive
+  network_turn();
+  n = received(pk, 64);
+  int spawns = 0;
+  for (int i = 0; i < n; i ++) if (pk[i].id == P_add_entity) spawns ++;
+  CHECK(spawns == 0);
+  (void)p;
+}
+
 int main (void) {
   RUN(test_ids_never_collide_with_players);
   RUN(test_entity_table_full);
   RUN(test_delta_or_teleport);
   RUN(test_out_of_range_is_removed);
   RUN(test_fast_entity_is_spawned_at_once);
+  RUN(test_dying_mob_stays_for_animation);
   return CHECK_DONE();
 }
