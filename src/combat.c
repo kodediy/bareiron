@@ -181,13 +181,13 @@ static float throughInvulnerability (uint32_t *until, float *last, float amount,
   return amount;
 }
 
-static void hurtPlayer (int32_t target_id, int32_t attacker_id, uint8_t damage_type, float amount) {
+static uint8_t hurtPlayer (int32_t target_id, int32_t attacker_id, uint8_t damage_type, float amount) {
   PlayerData *player;
-  if (getPlayerData(target_id, &player)) return;
-  if (player->health == 0) return;
+  if (getPlayerData(target_id, &player)) return 0;
+  if (player->health == 0) return 0;
   PlayerCombat *s = stateOf(player);
   float dealt = throughInvulnerability(&s->invulnerable, &s->last_damage, amount, server_ticks < s->invulnerable);
-  if (dealt <= 0) return;
+  if (dealt <= 0) return 0;
   if (damage_type != D_fall && damage_type != D_starve) {
     dealt = combat_armor(dealt, getPlayerDefensePoints(player), playerToughness(player));
   }
@@ -206,14 +206,15 @@ static void hurtPlayer (int32_t target_id, int32_t attacker_id, uint8_t damage_t
   }
   sc_setHealth(target_id, player->health, player->hunger, player->saturation);
   broadcastHurt(target_id, damage_type, died, NULL);
+  return 1;
 }
 
-static void hurtMob (int32_t target_id, int32_t attacker_id, uint8_t damage_type, float amount) {
+static uint8_t hurtMob (int32_t target_id, int32_t attacker_id, uint8_t damage_type, float amount) {
   Entity *mob = ent_by_id(target_id);
-  if (!mob || mob->kind != ENT_KIND_MOB || (mob->flags & ENT_DEAD)) return;
+  if (!mob || mob->kind != ENT_KIND_MOB || (mob->flags & ENT_DEAD)) return 0;
   uint32_t until = server_ticks + mob->hurt_ticks;
   float dealt = throughInvulnerability(&until, &mob->last_damage, amount, mob->hurt_ticks > 0);
-  if (dealt <= 0) return;
+  if (dealt <= 0) return 0;
   mob->hurt_ticks = (uint8_t)(until - server_ticks);
   const MobType *t = mob_type(mob->type);
   if (t && t->armor) dealt = combat_armor(dealt, t->armor, 0);
@@ -229,12 +230,13 @@ static void hurtMob (int32_t target_id, int32_t attacker_id, uint8_t damage_type
     mob->health -= dealt;
   }
   broadcastHurt(target_id, damage_type, died, mob);
+  return 1;
 }
 
-void combat_hurt (int32_t target_id, int32_t attacker_id, uint8_t damage_type, float amount) {
-  if (amount <= 0) return;
-  if (target_id > 0) hurtPlayer(target_id, attacker_id, damage_type, amount);
-  else hurtMob(target_id, attacker_id, damage_type, amount);
+uint8_t combat_hurt (int32_t target_id, int32_t attacker_id, uint8_t damage_type, float amount) {
+  if (amount <= 0) return 0;
+  if (target_id > 0) return hurtPlayer(target_id, attacker_id, damage_type, amount);
+  return hurtMob(target_id, attacker_id, damage_type, amount);
 }
 
 void combat_attack (PlayerData *attacker, int32_t target_id) {
@@ -244,8 +246,8 @@ void combat_attack (PlayerData *attacker, int32_t target_id) {
   float knock = COMBAT_KNOCKBACK + ((attacker->flags & 0x08) ? COMBAT_SPRINT_KNOCKBACK : 0);
   double ax = attacker->x + 0.5, az = attacker->z + 0.5;
 
-  combat_hurt(target_id, attacker->client_fd, D_player_attack, damage);
-  combat_knockback(target_id, ax, az, knock);
+  // Like vanilla, only a hit that hurts pushes
+  if (combat_hurt(target_id, attacker->client_fd, D_player_attack, damage)) combat_knockback(target_id, ax, az, knock);
 
   Entity *target = target_id < -1 ? ent_by_id(target_id) : NULL;
   if (crit) {
@@ -263,8 +265,7 @@ void combat_attack (PlayerData *attacker, int32_t target_id) {
       double dx = (double)(other->x - target->x) / ENT_UNIT, dz = (double)(other->z - target->z) / ENT_UNIT;
       double dy = (double)(other->y - target->y) / ENT_UNIT;
       if (dx * dx + dz * dz > 1.5 * 1.5 || fabs(dy) > 0.5) continue;
-      combat_hurt(other->id, attacker->client_fd, D_player_attack, 1);
-      combat_knockback(other->id, ax, az, COMBAT_KNOCKBACK);
+      if (combat_hurt(other->id, attacker->client_fd, D_player_attack, 1)) combat_knockback(other->id, ax, az, COMBAT_KNOCKBACK);
     }
   }
 }

@@ -103,9 +103,8 @@ static int32_t hitAt (const Entity *arrow, double x, double y, double z) {
 static void strike (Entity *e, int32_t target, double speed) {
   float damage = ceilf((float)(speed * e->u.arrow.damage));
   if (e->u.arrow.crit) damage += fast_rand() % (uint32_t)(damage / 2 + 2);
-  combat_hurt(target, e->u.arrow.owner, D_arrow, damage);
   double from_x = (double)e->x / ENT_UNIT - e->vx, from_z = (double)e->z / ENT_UNIT - e->vz;
-  combat_knockback(target, from_x, from_z, COMBAT_KNOCKBACK);
+  if (combat_hurt(target, e->u.arrow.owner, D_arrow, damage)) combat_knockback(target, from_x, from_z, COMBAT_KNOCKBACK);
   if (target > 0 && e->u.arrow.effect != ARROW_NO_EFFECT) {
     PlayerData *p;
     if (!getPlayerData(target, &p)) eff_apply(p, e->u.arrow.effect, 0, 600);

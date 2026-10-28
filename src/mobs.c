@@ -384,8 +384,7 @@ static void attack (Entity *e, const MobType *t, PlayerData *p) {
   double reach = (2 * t->body.width) * (2 * t->body.width) + 0.6;
   if (dx * dx + dz * dz > reach || fabs(dy) > 1.5 || e->u.mob.attack_cd) return;
   e->u.mob.attack_cd = ATTACK_COOLDOWN;
-  combat_hurt(p->client_fd, e->id, D_mob_attack, t->attack);
-  combat_knockback(p->client_fd, ex(e), ez(e), COMBAT_KNOCKBACK);
+  if (combat_hurt(p->client_fd, e->id, D_mob_attack, t->attack)) combat_knockback(p->client_fd, ex(e), ez(e), COMBAT_KNOCKBACK);
   if (e->type == E_husk) eff_apply(p, EFF_HUNGER, 0, 140);   // 7 s of Hunger
 }
 

@@ -16,7 +16,7 @@
 
 // Any damage: a player (id > 0) or an entity (id < -1). attacker_id is the
 // player or entity behind it, or -1.
-void  combat_hurt (int32_t target_id, int32_t attacker_id, uint8_t damage_type, float amount);
+uint8_t combat_hurt (int32_t target_id, int32_t attacker_id, uint8_t damage_type, float amount);
 
 // A player's swing at target_id: charge, crit, sweep, knockback
 void  combat_attack (PlayerData *attacker, int32_t target_id);

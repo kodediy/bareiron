@@ -105,11 +105,33 @@ static void test_player_armor_and_invulnerability (void) {
   CHECK(p->health == 12);
 }
 
+// Clicking again inside the invulnerability window does no damage, so no push
+static void test_no_knockback_without_damage (void) {
+  PlayerData *p = setup();
+  Entity *cow = mob_spawn(E_cow, 3 * ENT_UNIT, 70 * ENT_UNIT, 0);
+  int32_t id = ent_id(cow);
+  combat_attack(p, id);
+  CHECK(cow->vx > 0);
+  cow->vx = 0; cow->vz = 0;
+  server_ticks += 1;                               // a weak, quick second click
+  combat_attack(p, id);
+  CHECK(cow->vx == 0);
+  cow->health = 0.5f;
+  server_ticks += 40; cow->hurt_ticks = 0;         // the window over, as mobs_tick would count it
+  combat_attack(p, id);                            // the kill
+  CHECK(cow->flags & ENT_DEAD);
+  cow->vx = 0;
+  server_ticks += 40; cow->hurt_ticks = 0;
+  combat_attack(p, id);                            // hitting the body
+  CHECK(cow->vx == 0);
+}
+
 int main (void) {
   RUN(test_charge_scales_damage);
   RUN(test_crit_only_falling_and_charged);
   RUN(test_armor_formula);
   RUN(test_invulnerability_takes_only_the_difference);
   RUN(test_player_armor_and_invulnerability);
+  RUN(test_no_knockback_without_damage);
   return CHECK_DONE();
 }
