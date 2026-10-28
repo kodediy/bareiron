@@ -383,6 +383,7 @@ static void attack (Entity *e, const MobType *t, PlayerData *p) {
   double dx = p->x + 0.5 - ex(e), dy = p->y - ey(e), dz = p->z + 0.5 - ez(e);
   double reach = (2 * t->body.width) * (2 * t->body.width) + 0.6;
   if (dx * dx + dz * dz > reach || fabs(dy) > 1.5 || e->u.mob.attack_cd) return;
+  if (!sees(e, t, p)) return;   // like vanilla, never through a wall
   e->u.mob.attack_cd = ATTACK_COOLDOWN;
   if (combat_hurt(p->client_fd, e->id, D_mob_attack, t->attack)) combat_knockback(p->client_fd, ex(e), ez(e), COMBAT_KNOCKBACK);
   if (e->type == E_husk) eff_apply(p, EFF_HUNGER, 0, 140);   // 7 s of Hunger
@@ -413,8 +414,10 @@ static uint8_t swell (Entity *e, PlayerData *target) {
     d = sqrt(dx * dx + dy * dy + dz * dz);
   }
   int8_t dir = e->u.mob.swell_dir;
-  if (target && d < SWELL_START) dir = 1;
-  else if (!target || d > SWELL_STOP) dir = -1;
+  // Like vanilla, it lights only when it sees its target, and loses the fuse when it doesn't
+  uint8_t seen = target && d <= SWELL_STOP && sees(e, mob_type(e->type), target);
+  if (seen && d < SWELL_START) dir = 1;
+  else if (!seen) dir = -1;
   if (dir != e->u.mob.swell_dir) {
     if (dir > 0 && e->u.mob.swell == 0) toTrackers(e, hiss);
     e->u.mob.swell_dir = dir;

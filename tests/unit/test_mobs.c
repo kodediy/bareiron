@@ -104,11 +104,43 @@ static void test_creeper_defuses_when_player_leaves (void) {
   CHECK(p->health == 20);
 }
 
+// The player shut in a stone box one block thick, roof included
+static void boxIn (const PlayerData *p) {
+  for (short x = p->x - 1; x <= p->x + 1; x ++) for (short z = p->z - 1; z <= p->z + 1; z ++)
+    for (uint8_t y = FLOOR + 1; y <= FLOOR + 3; y ++)
+      if (!(x == p->x && z == p->z && y < FLOOR + 3)) makeBlockChange(x, y, z, B_stone);
+}
+
+static void test_creeper_does_not_light_through_a_wall (void) {
+  PlayerData *p = setup();
+  boxIn(p);
+  Entity *c = mob_spawn(E_creeper, (int32_t)(22.5 * ENT_UNIT), (FLOOR + 1) * ENT_UNIT, (int32_t)(10.5 * ENT_UNIT));
+  int32_t id = ent_id(c);
+  int lit = 0;
+  for (int t = 0; t < 200 && ent_by_id(id); t ++) { tick(); if (c->u.mob.swell) lit = 1; }
+  CHECK(ent_by_id(id) != NULL);
+  CHECK(!lit);
+}
+
+// A spider penned in a roofed cage that shares a wall with the player's box:
+// within its reach, but behind stone
+static void test_spider_does_not_bite_through_a_wall (void) {
+  PlayerData *p = setup();
+  boxIn(p);
+  for (short x = 21; x <= 24; x ++) for (short z = 9; z <= 12; z ++) for (uint8_t y = FLOOR + 1; y <= FLOOR + 3; y ++)
+    if (x == 21 || x == 24 || z == 9 || z == 12 || y == FLOOR + 3) makeBlockChange(x, y, z, B_stone);
+  mob_spawn(E_spider, 23 * ENT_UNIT, (FLOOR + 1) * ENT_UNIT, 11 * ENT_UNIT);
+  for (int t = 0; t < 200; t ++) tick();
+  CHECK(p->health == 20);
+}
+
 int main (void) {
   RUN(test_zombie_reaches_player_and_hits);
   RUN(test_cow_wanders_nearby);
   RUN(test_decisions_are_staggered);
   RUN(test_creeper_explodes_near_player);
   RUN(test_creeper_defuses_when_player_leaves);
+  RUN(test_creeper_does_not_light_through_a_wall);
+  RUN(test_spider_does_not_bite_through_a_wall);
   return CHECK_DONE();
 }
