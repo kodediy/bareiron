@@ -21,7 +21,7 @@
 #define MAX_BROKEN 2048           // blocks one explosion may break
 #define BROKEN_HASH 4096
 
-static const PhysBody tnt_body = { 0.98f, 0.98f, 0.0f, 0.04f, 0.98f };
+static const PhysBody tnt_body = { 0.98f, 0.98f, 0.0f, 0.04f, 0.98f, 0 };
 
 float block_blast_resistance (uint8_t block) {
   return B_blast_resistance[block];

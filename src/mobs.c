@@ -38,13 +38,13 @@ static const MobType types[] = {
   { E_creeper, CAT_MONSTER, 20, 0.25f, 0, 16, BODY(0.6f, 1.7f), 0, 160, { 0 },
     { GOAL_FLOAT, GOAL_SWELL, GOAL_CHASE_MELEE, GOAL_WANDER, GOAL_LOOK_AT_PLAYER, 0 }, 0, 0 },
   { E_cow, CAT_CREATURE, 10, 0.2f, 0, 16, BODY(0.9f, 1.4f), S_entity_cow_ambient, 160, { I_wheat },
-    ANIMAL_GOALS },
+    ANIMAL_GOALS, 0, 0 },
   { E_pig, CAT_CREATURE, 10, 0.25f, 0, 16, BODY(0.9f, 0.9f), S_entity_pig_ambient, 160, { I_carrot, I_potato, I_beetroot },
-    ANIMAL_GOALS },
+    ANIMAL_GOALS, 0, 0 },
   { E_sheep, CAT_CREATURE, 8, 0.23f, 0, 16, BODY(0.9f, 1.3f), S_entity_sheep_ambient, 160, { I_wheat },
-    ANIMAL_GOALS },
+    ANIMAL_GOALS, 0, 0 },
   { E_chicken, CAT_CREATURE, 4, 0.25f, 0, 16, BODY(0.4f, 0.7f), S_entity_chicken_ambient, 160, { I_wheat_seeds, I_melon_seeds, I_pumpkin_seeds },
-    ANIMAL_GOALS },
+    ANIMAL_GOALS, 0, 0 },
 };
 
 #define SPEED_WANDER 1.0f

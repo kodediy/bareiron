@@ -12,7 +12,7 @@
 #include "drops.h"
 
 // An item's box, as vanilla: small, lighter gravity, no jumping ledges
-static const PhysBody item_body = { 0.25f, 0.25f, 0.0f, 0.04f, 0.98f };
+static const PhysBody item_body = { 0.25f, 0.25f, 0.0f, 0.04f, 0.98f, 0 };
 
 #define MERGE_EVERY 10
 
