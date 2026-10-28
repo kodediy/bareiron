@@ -165,8 +165,8 @@ static void sendMove (Entity *e) {
     int fd = player_data[i].client_fd;
     if (fd == -1) continue;
     if (far) {
-      sc_teleportEntity(fd, e->id, (double)e->x / ENT_UNIT, (double)e->y / ENT_UNIT, (double)e->z / ENT_UNIT,
-        e->yaw * 360.0f / 256.0f, e->pitch * 360.0f / 256.0f);
+      sc_syncEntity(fd, e->id, (double)e->x / ENT_UNIT, (double)e->y / ENT_UNIT, (double)e->z / ENT_UNIT,
+        e->vx, e->vy, e->vz, e->yaw * 360.0f / 256.0f, e->pitch * 360.0f / 256.0f, on_ground);
     } else if (moved) {
       sc_moveEntity(fd, e->id, (int16_t)dx, (int16_t)dy, (int16_t)dz, turned, e->yaw, e->pitch, on_ground);
     } else if (turned) {

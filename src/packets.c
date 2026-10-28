@@ -997,6 +997,40 @@ int sc_entityAnimation (int client_fd, int id, uint8_t animation) {
   return 0;
 }
 
+// S->C Entity Position Sync with a velocity (blocks per tick), so the
+// client keeps simulating a fast entity between updates
+int sc_syncEntity (int client_fd, int id, double x, double y, double z,
+                   double vx, double vy, double vz, float yaw, float pitch, uint8_t on_ground) {
+  writeVarInt(client_fd, 58 + sizeVarInt(id));
+  writeByte(client_fd, P_entity_position_sync);
+  writeVarInt(client_fd, id);
+  writeDouble(client_fd, x);
+  writeDouble(client_fd, y);
+  writeDouble(client_fd, z);
+  writeDouble(client_fd, vx);
+  writeDouble(client_fd, vy);
+  writeDouble(client_fd, vz);
+  writeFloat(client_fd, yaw);
+  writeFloat(client_fd, pitch);
+  writeByte(client_fd, on_ground);
+  return 0;
+}
+
+// S->C Set Equipment: one slot (0 = main hand) of an entity
+int sc_setEquipment (int client_fd, int id, uint8_t slot, uint16_t item, uint8_t count) {
+  writeVarInt(client_fd, 1 + sizeVarInt(id) + 1 + sizeVarInt(count) + (count ? sizeVarInt(item) + 2 : 0));
+  writeByte(client_fd, P_set_equipment);
+  writeVarInt(client_fd, id);
+  writeByte(client_fd, slot);   // last entry: no continuation bit
+  writeVarInt(client_fd, count);
+  if (count) {
+    writeVarInt(client_fd, item);
+    writeVarInt(client_fd, 0);
+    writeVarInt(client_fd, 0);
+  }
+  return 0;
+}
+
 // S->C Teleport Entity
 int sc_teleportEntity (
   int client_fd, int id,

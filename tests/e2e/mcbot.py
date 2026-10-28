@@ -31,6 +31,7 @@ PLAY_ADD_ENTITY = 0x01
 PLAY_LOGIN = 0x2B
 PLAY_SET_ENTITY_MOTION = 0x5E
 PLAY_TAKE_ITEM_ENTITY = 0x75
+PLAY_SET_CONTAINER_SLOT = 0x14
 PLAY_REMOVE_ENTITIES = 0x46
 PLAY_MOVE_ENTITY_POS = 0x2E
 PLAY_MOVE_ENTITY_POS_ROT = 0x2F
@@ -45,6 +46,7 @@ SB_PLAY_KEEP_ALIVE = 0x1B
 SB_PLAY_SET_POSITION = 0x1D
 SB_PLAY_PLAYER_ACTION = 0x28
 SB_PLAY_PLAYER_LOADED = 0x2B
+SB_PLAY_USE_ITEM = 0x40
 
 
 class Disconnected(Exception):
@@ -110,6 +112,7 @@ class Bot:
     self.motions = []            # (vx, vy, vz) blocks/tick the server set on this bot
     self.health = None           # last Set Health
     self.pickups = []            # (item entity id, collector id, count) from Take Item Entity
+    self.slots = {}              # player inventory slot -> (item, count), from Set Container Slot
 
   # -- transport --------------------------------------------------------
 
@@ -223,6 +226,14 @@ class Bot:
         self.state = "play"
     elif self.state == "play":
       self.packet_times.setdefault(packet_id, []).append(time.monotonic())
+      if packet_id == PLAY_SET_CONTAINER_SLOT:
+        window, pos = read_varint(payload, 0)
+        _, pos = read_varint(payload, pos)          # state id
+        slot = struct.unpack(">h", payload[pos:pos + 2])[0]
+        count, pos = read_varint(payload, pos + 2)
+        item = read_varint(payload, pos)[0] if count else 0
+        if window == 0:
+          self.slots[slot] = (item, count)
       if packet_id == PLAY_TAKE_ITEM_ENTITY:
         collected, pos = read_varint(payload, 0)
         collector, pos = read_varint(payload, pos)
@@ -311,6 +322,14 @@ class Bot:
       angle = (time.monotonic() - start) * speed / radius
       self.move_to(cx + radius * math.cos(angle), y, cz + radius * math.sin(angle))
       self.pump(step_s)
+
+  def use_item(self, yaw=0.0, pitch=0.0):
+    """Right click in the air with the held item (draws a bow)."""
+    self.send(SB_PLAY_USE_ITEM, varint(0) + varint(0) + struct.pack(">ff", yaw, pitch))
+
+  def release_use_item(self):
+    """Lets go of the held item (shoots a drawn bow)."""
+    self.send(SB_PLAY_PLAYER_ACTION, varint(5) + block_position(0, 0, 0) + bytes([0]) + varint(0))
 
   def break_block(self, x, y, z):
     for status in (0, 2):

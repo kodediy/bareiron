@@ -62,7 +62,14 @@ typedef struct Entity {
       PathNode path[8];       // the next steps of its path
     } mob;
     struct { uint16_t item; uint8_t count; } item;
-    struct { int32_t owner; float damage; } arrow;
+    struct {
+      int32_t owner;          // who shot it: a player, a mob, or -1
+      float   damage;         // base damage, times its speed
+      uint8_t effect;         // EFF_* on a player it hits, or 0xFF
+      uint8_t pickup;         // a player may take it back
+      uint8_t in_ground;
+      uint8_t crit;
+    } arrow;
   } u;
 } Entity;
 

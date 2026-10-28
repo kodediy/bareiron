@@ -26,6 +26,7 @@
 #include "combat.h"
 #include "drops.h"
 #include "effects.h"
+#include "arrows.h"
 #include "spawning.h"
 
 int client_states[MAX_CONNECTIONS * 2];
@@ -205,6 +206,17 @@ void handlePlayerJoin (PlayerData* player) {
   if (player->flags & 0x20) {
     combat_forget_player(player);
     eff_clear(player);
+    #ifndef ESP_PLATFORM
+    // End-to-end tests only: BAREIRON_TEST_KIT="item:count,..." on joining
+    const char *kit = getenv("BAREIRON_TEST_KIT");
+    while (kit && *kit) {
+      int item = atoi(kit), n = 1;
+      const char *colon = strchr(kit, ':'), *comma = strchr(kit, ',');
+      if (colon && (!comma || colon < comma)) n = atoi(colon + 1);
+      givePlayerItem(player, item, n);
+      kit = comma ? comma + 1 : NULL;
+    }
+    #endif
   }
 
   // Clients also report "loaded" after respawning; only the first one
@@ -478,6 +490,7 @@ void broadcastPlayerMetadata (PlayerData *player) {
 // What a player is sent right after an entity's Spawn Entity
 void ent_send_extra (const Entity *e, int client_fd) {
   if (e->kind == ENT_KIND_ITEM) { drops_send_meta(e, client_fd); return; }
+  if (e->kind == ENT_KIND_ARROW) { arrows_send_extra(e, client_fd); return; }
   if (e->type == E_sheep && (e->flags & ENT_SHEARED)) {
     EntityData wool = { META_SHEEP_WOOL, META_T_BYTE, { (uint8_t)0x10 } };
     sc_setEntityMetadata(client_fd, e->id, &wool, 1);
@@ -1184,8 +1197,9 @@ void handlePlayerAction (PlayerData *player, int action, short x, short y, short
     return;
   }
 
-  // "Finish eating" action, called any time eating stops
+  // "Finish eating" action, called any time eating stops; also lets go of a bow
   if (action == 5) {
+    bow_release(player);
     // Reset eating timer and clear eating flag
     player->flagval_16 = 0;
     player->flags &= ~0x10;
@@ -1248,6 +1262,12 @@ void handlePlayerUseItem (PlayerData *player, short x, short y, short z, uint8_t
   // Get held item properties
   uint8_t *count = &player->inventory_count[player->hotbar];
   uint16_t *item = &player->inventory_items[player->hotbar];
+
+  // A bow is drawn with Use Item and shot when let go (handlePlayerAction 5)
+  if (face == 255 && *item == I_bow) {
+    bow_start(player);
+    return;
+  }
 
   // Check interaction with containers when not sneaking
   if (!(player->flags & 0x04) && face != 255) {
@@ -1544,6 +1564,7 @@ void handleServerTick (int64_t time_since_last_tick) {
   spawn_tick();
   mobs_tick();
   drops_tick();
+  arrows_tick();
 
   // Entities' movement and who sees them, every few ticks
   ent_network_tick();
