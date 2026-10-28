@@ -90,3 +90,21 @@ Los monstruos aparecen solos de noche y en las cuevas: un intento por jugador y 
 | Peor vuelta con 6 bots, e2e de carga | 1,5 ms | 5,1 ms |
 
 El salto de la peor vuelta viene sobre todo de los caminos, hasta 600 nodos de A* por tick. En el P4 la Task 16 lo mide y baja `PATH_TICK_BUDGET` si hace falta.
+
+## Medido en el Kode Dot (Plan 5, Task 16)
+
+En el P4 este código va unas 100 veces más lento que en el Mac, no 20-40 como se esperaba. Con 6 bots andando (sesión 2, 28-oct):
+
+| P4, peor de cada 10 s | De día | De noche (60-70 entidades) |
+|---|---:|---:|
+| Un chunk enviado en una vuelta | 26-34 ms | 30-33 ms |
+| Tick entero | 11-18 ms | 51-83 ms |
+| · mobs | 10-15 ms | 48-79 ms |
+| · aparición de monstruos | 4-10 ms | 3-4 ms |
+| · objetos, flechas, TNT | 0,4-1 ms | 4-9 ms |
+| · red de entidades | 0,7-1,2 ms | 1,2-2 ms |
+
+- **Caminos:** eran lo más caro, hasta 600 nodos de A* por tick con varias consultas de bloque cada uno, y cada consulta cuesta del orden de 2 µs en el P4. Ahora el buscador recuerda los bloques que ya ha mirado en una búsqueda, y el presupuesto baja a 200 nodos por tick.
+- **Aparición:** un intento por jugador cada 4 ticks, con los topes contados una vez por tick.
+- **Resultado en el Mac,** tick con 48 mobs: de 143 µs a 47 µs.
+- **Los chunks:** por sí solos (~30 ms) ya pasan del objetivo de 30 ms por vuelta. Es lo que resuelven las Tasks 3-4 del Plan 4: la caché de chunks en PSRAM y generar en el otro núcleo.
