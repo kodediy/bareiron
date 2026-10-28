@@ -35,6 +35,16 @@ static int boxHits (double x, double y, double z, const PhysBody *b) {
   return 0;
 }
 
+int phys_line_clear (double x0, double y0, double z0, double x1, double y1, double z1) {
+  double dx = x1 - x0, dy = y1 - y0, dz = z1 - z0;
+  int n = (int)ceil(sqrt(dx * dx + dy * dy + dz * dz) / 0.25);
+  for (int s = 1; s < n; s ++) {
+    double t = (double)s / n;
+    if (solidAt((int)floor(x0 + dx * t), (int)floor(y0 + dy * t), (int)floor(z0 + dz * t))) return 0;
+  }
+  return 1;
+}
+
 int phys_box_free (int32_t x, int32_t y, int32_t z, const PhysBody *b) {
   return !boxHits((double)x / ENT_UNIT, (double)y / ENT_UNIT, (double)z / ENT_UNIT, b);
 }
@@ -84,6 +94,8 @@ void phys_step (Entity *e, const PhysBody *b) {
     e->vy = PHYS_JUMP;
     jumped = 1;
   }
+  // A climber against a wall goes up it (vanilla: 0.2 a tick, gravity after)
+  if (b->climbs && (stopped_x || stopped_z)) e->vy = 0.2f;
   if (stopped_x) e->vx = 0;
   if (stopped_z) e->vz = 0;
 

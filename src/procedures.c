@@ -493,15 +493,7 @@ void ent_send_extra (const Entity *e, int client_fd) {
   if (e->kind == ENT_KIND_ITEM) { drops_send_meta(e, client_fd); return; }
   if (e->kind == ENT_KIND_ARROW) { arrows_send_extra(e, client_fd); return; }
   if (e->kind == ENT_KIND_TNT) { tnt_send_extra(e, client_fd); return; }
-  if (e->type == E_creeper && e->u.mob.swell_dir > 0) {
-    EntityData state = { META_CREEPER_STATE, META_T_VARINT, { 0 } };
-    state.value.pose = 1;
-    sc_setEntityMetadata(client_fd, e->id, &state, 1);
-  }
-  if (e->type == E_sheep && (e->flags & ENT_SHEARED)) {
-    EntityData wool = { META_SHEEP_WOOL, META_T_BYTE, { (uint8_t)0x10 } };
-    sc_setEntityMetadata(client_fd, e->id, &wool, 1);
-  }
+  mob_send_extra(e, client_fd);
 }
 
 // Sends an entity's metadata to everyone who has it spawned

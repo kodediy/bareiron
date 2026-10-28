@@ -15,6 +15,7 @@ typedef struct {
   float step_up;         // a ledge this high is walked onto, one block jumped when blocked; 0: never jumps (items)
   float gravity;         // per tick: 0.08 for mobs
   float drag;            // vertical drag per tick: 0.98
+  uint8_t climbs;        // walks up walls it bumps into (spiders)
 } PhysBody;
 
 #define PHYS_JUMP 0.42f        // vanilla's jump velocity
@@ -27,6 +28,9 @@ typedef struct {
 // in water, then applies gravity and friction. Sets ENT_ON_GROUND and
 // ENT_IN_WATER, and marks e moved when it moved.
 void phys_step (Entity *e, const PhysBody *b);
+
+// 1 if nothing solid lies on the straight line between the two points (blocks)
+int phys_line_clear (double x0, double y0, double z0, double x1, double y1, double z1);
 
 // 1 if the box with its feet centred at (x, y, z) (ENT_UNIT) touches no solid block
 int phys_box_free (int32_t x, int32_t y, int32_t z, const PhysBody *b);

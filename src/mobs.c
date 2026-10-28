@@ -15,15 +15,26 @@
 #include "combat.h"
 #include "explosion.h"
 #include "entitymeta.h"
+#include "spawning.h"
+#include "arrows.h"
+#include "effects.h"
 
-#define BODY(w, h) { w, h, 0.6f, 0.08f, 0.98f }
+#define BODY(w, h) { w, h, 0.6f, 0.08f, 0.98f, 0 }
+#define BODY_CLIMB(w, h) { w, h, 0.6f, 0.08f, 0.98f, 1 }
+#define ZOMBIE_GOALS { GOAL_FLOAT, GOAL_CHASE_MELEE, GOAL_WANDER, GOAL_LOOK_AT_PLAYER, 0 }
+#define SKELETON_GOALS { GOAL_FLOAT, GOAL_AVOID_SUN, GOAL_RANGED_BOW, GOAL_WANDER, GOAL_LOOK_AT_PLAYER, 0 }
 
 // Vanilla's attributes (Normal difficulty)
 static const MobType types[] = {
-  { E_zombie, CAT_MONSTER, 20, 0.23f, 3, 35, BODY(0.6f, 1.95f), S_entity_zombie_ambient, 160, { 0 },
-    { GOAL_FLOAT, GOAL_CHASE_MELEE, GOAL_WANDER, GOAL_LOOK_AT_PLAYER, 0 }, 2 },
+  { E_zombie, CAT_MONSTER, 20, 0.23f, 3, 35, BODY(0.6f, 1.95f), S_entity_zombie_ambient, 160, { 0 }, ZOMBIE_GOALS, 2, 1 },
+  { E_zombie_villager, CAT_MONSTER, 20, 0.23f, 3, 35, BODY(0.6f, 1.95f), S_entity_zombie_villager_ambient, 160, { 0 }, ZOMBIE_GOALS, 2, 1 },
+  { E_husk, CAT_MONSTER, 20, 0.23f, 3, 35, BODY(0.6f, 1.95f), S_entity_husk_ambient, 160, { 0 }, ZOMBIE_GOALS, 2, 0 },
+  { E_skeleton, CAT_MONSTER, 20, 0.25f, 0, 16, BODY(0.6f, 1.99f), S_entity_skeleton_ambient, 160, { 0 }, SKELETON_GOALS, 0, 1 },
+  { E_stray, CAT_MONSTER, 20, 0.25f, 0, 16, BODY(0.6f, 1.99f), S_entity_stray_ambient, 160, { 0 }, SKELETON_GOALS, 0, 1 },
+  { E_spider, CAT_MONSTER, 16, 0.3f, 2, 16, BODY_CLIMB(1.4f, 0.9f), S_entity_spider_ambient, 160, { 0 },
+    { GOAL_FLOAT, GOAL_LEAP, GOAL_CHASE_MELEE, GOAL_WANDER, GOAL_LOOK_AT_PLAYER, 0 }, 0, 0 },
   { E_creeper, CAT_MONSTER, 20, 0.25f, 0, 16, BODY(0.6f, 1.7f), 0, 160, { 0 },
-    { GOAL_FLOAT, GOAL_SWELL, GOAL_CHASE_MELEE, GOAL_WANDER, GOAL_LOOK_AT_PLAYER, 0 }, 0 },
+    { GOAL_FLOAT, GOAL_SWELL, GOAL_CHASE_MELEE, GOAL_WANDER, GOAL_LOOK_AT_PLAYER, 0 }, 0, 0 },
   { E_cow, CAT_CREATURE, 10, 0.2f, 0, 16, BODY(0.9f, 1.4f), S_entity_cow_ambient, 160, { I_wheat },
     { GOAL_FLOAT, GOAL_PANIC, GOAL_TEMPT, GOAL_WANDER, GOAL_LOOK_AT_PLAYER, 0 } },
   { E_pig, CAT_CREATURE, 10, 0.25f, 0, 16, BODY(0.9f, 0.9f), S_entity_pig_ambient, 160, { I_carrot, I_potato, I_beetroot },
@@ -46,6 +57,16 @@ static const MobType types[] = {
 #define SWELL_START 3.0            // a creeper lights this close to its target
 #define SWELL_STOP 7.0             // and calms down past this
 #define SWELL_FUSE 30              // ticks from lit to blast
+#define BOW_RANGE 15.0             // a skeleton shoots from up to this far
+#define BOW_DRAW 20                // ticks drawing before the arrow leaves
+#define BOW_COOLDOWN 20            // and after it: one arrow every 40 ticks
+#define BOW_SPEED 1.6f
+#define BOW_INACCURACY 6.0f        // vanilla: 14 - 4 x difficulty
+#define TOO_CLOSE 4.0              // a skeleton backs off from a player this close
+#define FIRE_TICKS 160             // 8 s alight after the sun touches it
+#define PROVOKED_TICKS 200
+#define BABY_CHANCE 20             // 1 zombie in 20 is a baby
+#define BABY_SPEED 1.5f
 
 uint32_t mob_decisions_last_tick = 0;
 static int path_budget;
@@ -64,6 +85,9 @@ Entity *mob_spawn (uint16_t type, int32_t x, int32_t y, int32_t z) {
   if (!e) return NULL;
   e->health = t->max_health;
   e->yaw = e->head_yaw = (uint8_t)(fast_rand() & 255);
+  if ((type == E_zombie || type == E_husk || type == E_zombie_villager) && fast_rand() % BABY_CHANCE == 0) {
+    e->flags |= ENT_BABY;
+  }
   return e;
 }
 
@@ -133,6 +157,21 @@ static uint8_t randomSpot (const Entity *e, int r, int *ox, int *oy, int *oz) {
   return 0;
 }
 
+// A spot within 10 blocks with something overhead, out of the sun
+static uint8_t shadeSpot (const Entity *e, int *ox, int *oy, int *oz) {
+  for (int tries = 0; tries < 10; tries ++) {
+    int x, y, z;
+    if (!randomSpot(e, 10, &x, &y, &z)) continue;
+    if (!spawn_sky_above((short)x, (uint8_t)y, (short)z)) { *ox = x; *oy = y; *oz = z; return 1; }
+  }
+  return 0;
+}
+
+// Whether the mob's eyes see the player's
+static uint8_t sees (const Entity *e, const MobType *t, const PlayerData *p) {
+  return phys_line_clear(ex(e), ey(e) + t->body.height * 0.85, ez(e), p->x + 0.5, p->y + 1.62, p->z + 0.5);
+}
+
 static uint8_t holdsFood (const PlayerData *p, const MobType *t) {
   uint16_t held = p->inventory_items[p->hotbar];
   for (int i = 0; i < 3; i ++) if (t->food[i] && held == t->food[i]) return 1;
@@ -169,6 +208,32 @@ static void decide (Entity *e, const MobType *t) {
   mob_decisions_last_tick ++;
   double d;
 
+  // On fire by day: into the shade first
+  if (hasGoal(t, GOAL_AVOID_SUN) && e->u.mob.fire && spawn_is_day()) {
+    if (e->u.mob.goal != GOAL_AVOID_SUN || e->u.mob.path_i >= e->u.mob.path_len) {
+      int x, y, z;
+      if (shadeSpot(e, &x, &y, &z)) requestPath(e, x, y, z);
+    }
+    e->u.mob.goal = GOAL_AVOID_SUN;
+    return;
+  }
+
+  if (hasGoal(t, GOAL_RANGED_BOW)) {
+    PlayerData *p = nearestPlayer(e, t->follow_range, &d);
+    if (p) {
+      e->u.mob.target = p->client_fd;
+      e->u.mob.goal = GOAL_RANGED_BOW;
+      // Closer until it is in range and sees the player; then it stands and shoots
+      if (d > BOW_RANGE || !sees(e, t, p)) {
+        if (e->u.mob.path_i >= e->u.mob.path_len) requestPath(e, p->x, p->y, p->z);
+      } else {
+        e->u.mob.path_len = 0;
+      }
+      return;
+    }
+    e->u.mob.target = -1;
+  }
+
   if (hasGoal(t, GOAL_PANIC) && e->u.mob.panic) {
     if (e->u.mob.goal != GOAL_PANIC || e->u.mob.path_i >= e->u.mob.path_len) {
       int x, y, z;
@@ -180,6 +245,11 @@ static void decide (Entity *e, const MobType *t) {
 
   if (hasGoal(t, GOAL_CHASE_MELEE)) {
     PlayerData *p = nearestPlayer(e, t->follow_range, &d);
+    // A spider in daylight under the sky leaves players alone, unless one hit it
+    if (p && e->type == E_spider && !e->u.mob.provoked && spawn_is_day() &&
+        spawn_sky_above((short)floor(ex(e)), (uint8_t)floor(ey(e)), (short)floor(ez(e)))) {
+      p = NULL;
+    }
     if (p) {
       e->u.mob.target = p->client_fd;
       e->u.mob.goal = GOAL_CHASE_MELEE;
@@ -238,6 +308,7 @@ static void attack (Entity *e, const MobType *t, PlayerData *p) {
   e->u.mob.attack_cd = ATTACK_COOLDOWN;
   combat_hurt(p->client_fd, e->id, D_mob_attack, t->attack);
   combat_knockback(p->client_fd, ex(e), ez(e), COMBAT_KNOCKBACK);
+  if (e->type == E_husk) eff_apply(p, EFF_HUNGER, 0, 140);   // 7 s of Hunger
 }
 
 static void sendCreeperState (const Entity *e, int client_fd) {
@@ -285,11 +356,81 @@ static uint8_t swell (Entity *e, PlayerData *target) {
   return 0;
 }
 
+static void sendLivingFlags (const Entity *e, int client_fd) {
+  EntityData hand = { META_LIVING_FLAGS, META_T_BYTE, { (uint8_t)(e->u.mob.bow_ticks ? 0x01 : 0) } };
+  sc_setEntityMetadata(client_fd, e->id, &hand, 1);
+}
+
+static void sendFlags (const Entity *e, int client_fd) {
+  EntityData flags = { META_FLAGS, META_T_BYTE, { (uint8_t)((e->flags & ENT_ON_FIRE) ? META_FLAG_ON_FIRE : 0) } };
+  sc_setEntityMetadata(client_fd, e->id, &flags, 1);
+}
+
+static void twang (const Entity *e, int client_fd) {
+  sc_soundEntity(client_fd, S_entity_skeleton_shoot, 5, e->id, 1.0f, 1.0f);
+}
+
+static float spread (void) {
+  // roughly a normal distribution: the sum of three uniforms
+  float s = 0;
+  for (int i = 0; i < 3; i ++) s += (float)(fast_rand() % 1000) / 1000.0f - 0.5f;
+  return s;
+}
+
+// A skeleton's turn: back off when too close, draw, shoot
+static void shootAt (Entity *e, const MobType *t, PlayerData *p) {
+  double dx = p->x + 0.5 - ex(e), dz = p->z + 0.5 - ez(e);
+  double h = sqrt(dx * dx + dz * dz);
+  e->head_yaw = e->yaw = yawToward(dx, dz);
+  ent_moved(e);
+  if (h < TOO_CLOSE) steer(e, -dx, -dz, t->speed);
+  if (h > BOW_RANGE || !sees(e, t, p)) {
+    if (e->u.mob.bow_ticks) { e->u.mob.bow_ticks = 0; toTrackers(e, sendLivingFlags); }
+    return;
+  }
+  if (!e->u.mob.bow_ticks) {
+    if (e->u.mob.attack_cd) return;
+    e->u.mob.bow_ticks = BOW_DRAW;
+    toTrackers(e, sendLivingFlags);
+    return;
+  }
+  if (-- e->u.mob.bow_ticks) return;
+  // vanilla: aim at a third of the target's height, lifted by a fifth of the distance
+  double eye = ey(e) + t->body.height * 0.87;
+  double dy = p->y + 0.6 - eye + h * 0.2;
+  double len = sqrt(dx * dx + dy * dy + dz * dz);
+  float k = 0.0075f * BOW_INACCURACY;
+  arrow_shoot(e->id, e->x, (int32_t)(eye * ENT_UNIT), e->z,
+    (float)(dx / len) + spread() * k, (float)(dy / len) + spread() * k, (float)(dz / len) + spread() * k,
+    BOW_SPEED, ARROW_BASE_DAMAGE, 0, e->type == E_stray ? EFF_SLOWNESS : ARROW_NO_EFFECT);
+  e->u.mob.attack_cd = BOW_COOLDOWN;
+  toTrackers(e, sendLivingFlags);
+  toTrackers(e, twang);
+}
+
 // Every tick: walk the path (or straight at a close target), attack, look
 static void control (Entity *e, const MobType *t) {
   uint8_t goal = e->u.mob.goal;
   float speed = t->speed * speedFor(goal);
-  PlayerData *target = (goal == GOAL_CHASE_MELEE || goal == GOAL_TEMPT) ? playerById(e->u.mob.target) : NULL;
+  if (e->flags & ENT_BABY) speed *= BABY_SPEED;
+  PlayerData *target = (goal == GOAL_CHASE_MELEE || goal == GOAL_TEMPT || goal == GOAL_RANGED_BOW)
+    ? playerById(e->u.mob.target) : NULL;
+
+  if (goal == GOAL_RANGED_BOW && target && e->u.mob.path_i >= e->u.mob.path_len) {
+    shootAt(e, t, target);
+    return;
+  }
+
+  // A spider jumps at a target 2 to 4 blocks away (vanilla: 0.4 up, 0.4 at it)
+  if (hasGoal(t, GOAL_LEAP) && target && goal == GOAL_CHASE_MELEE && (e->flags & ENT_ON_GROUND) &&
+      fast_rand() % 20 == 0) {
+    double dx = target->x + 0.5 - ex(e), dz = target->z + 0.5 - ez(e), h = sqrt(dx * dx + dz * dz);
+    if (h > 2 && h < 4) {
+      e->vx = (float)(dx / h * 0.4) + e->vx * 0.2f;
+      e->vz = (float)(dz / h * 0.4) + e->vz * 0.2f;
+      e->vy = 0.4f;
+    }
+  }
 
   if (hasGoal(t, GOAL_SWELL)) {
     if (swell(e, goal == GOAL_CHASE_MELEE ? target : NULL)) return;
@@ -331,6 +472,20 @@ static void ambientSound (const Entity *e, const MobType *t) {
   }
 }
 
+void mob_send_extra (const Entity *e, int client_fd) {
+  if (e->flags & ENT_BABY) {
+    EntityData baby = { META_BABY, META_T_BOOLEAN, { 1 } };
+    sc_setEntityMetadata(client_fd, e->id, &baby, 1);
+  }
+  if (e->flags & ENT_ON_FIRE) sendFlags(e, client_fd);
+  if (e->type == E_skeleton || e->type == E_stray) sc_setEquipment(client_fd, e->id, 0, I_bow, 1);
+  if (e->type == E_creeper && e->u.mob.swell_dir > 0) sendCreeperState(e, client_fd);
+  if (e->type == E_sheep && (e->flags & ENT_SHEARED)) {
+    EntityData wool = { META_SHEEP_WOOL, META_T_BYTE, { (uint8_t)0x10 } };
+    sc_setEntityMetadata(client_fd, e->id, &wool, 1);
+  }
+}
+
 void mob_hurt_reaction (Entity *e, int32_t attacker_id) {
   const MobType *t = mob_type(e->type);
   if (!t) return;
@@ -340,6 +495,7 @@ void mob_hurt_reaction (Entity *e, int32_t attacker_id) {
     e->u.mob.path_wait = 0;
   } else if (attacker_id > 0) {
     e->u.mob.target = attacker_id;
+    e->u.mob.provoked = PROVOKED_TICKS;
   }
 }
 
@@ -376,6 +532,7 @@ void mobs_tick (void) {
     if (e->u.mob.path_wait) e->u.mob.path_wait --;
     if (e->u.mob.panic) e->u.mob.panic --;
     if (e->u.mob.look_ticks) e->u.mob.look_ticks --;
+    if (e->u.mob.provoked) e->u.mob.provoked --;
 
     // Far from every player: hostiles go, animals (for now) at twice that
     double d;
@@ -399,10 +556,21 @@ void mobs_tick (void) {
       }
     }
 
-    // Hostiles burn in daylight above ground, once a second
-    if (t->category == CAT_MONSTER && (world_time < 13000 || world_time > 23460) &&
-        ey(e) > 48 && server_ticks % (uint32_t)TICKS_PER_SECOND == 0) {
-      combat_hurt(e->id, -1, D_on_fire, 2);
+    // The undead catch fire under the open sky by day (checked once a second)
+    // and burn for 8 s, 1 damage a second; water puts them out
+    if (t->burns && (server_ticks + i) % 20 == 0 && spawn_is_day() && !(e->flags & ENT_IN_WATER) &&
+        spawn_sky_above((short)floor(ex(e)), (uint8_t)floor(ey(e) + t->body.height), (short)floor(ez(e)))) {
+      e->u.mob.fire = FIRE_TICKS;
+    }
+    if (e->flags & ENT_IN_WATER) e->u.mob.fire = 0;
+    uint8_t burning = e->u.mob.fire > 0;
+    if (burning != ((e->flags & ENT_ON_FIRE) != 0)) {
+      e->flags ^= ENT_ON_FIRE;
+      toTrackers(e, sendFlags);
+    }
+    if (burning) {
+      e->u.mob.fire --;
+      if (e->u.mob.fire % 20 == 0) combat_hurt(e->id, -1, D_on_fire, 1);
       if (e->flags & ENT_DEAD) continue;
     }
 

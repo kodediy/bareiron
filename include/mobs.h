@@ -27,6 +27,9 @@ enum {
   GOAL_WANDER,          // stroll to a spot within 10 blocks now and then
   GOAL_LOOK_AT_PLAYER,  // turn the head to a player within 8 blocks
   GOAL_SWELL,           // a creeper: lit within 3 blocks of its target, out past 7, blows at 30 ticks
+  GOAL_RANGED_BOW,      // keep within 15 blocks in sight and shoot every 40 ticks
+  GOAL_LEAP,            // jump at a target 2 to 4 blocks away
+  GOAL_AVOID_SUN,       // burning by day: look for shade
 };
 
 typedef struct {
@@ -39,12 +42,14 @@ typedef struct {
   uint16_t food[3];           // I_* that tempt it; 0 = none
   uint8_t goals[8];           // GOAL_* in priority order, 0-terminated
   uint8_t armor;              // armor points (a zombie has 2)
+  uint8_t burns;              // catches fire in daylight under the open sky
 } MobType;
 
 const MobType *mob_type (uint16_t entity_type);
 Entity *mob_spawn (uint16_t type, int32_t x, int32_t y, int32_t z); // sets health; sent by the next network turn
 void mobs_tick (void);
 void mob_hurt_reaction (Entity *e, int32_t attacker_id);   // a hit: panic or fight back
+void mob_send_extra (const Entity *e, int client_fd);      // metadata and equipment for a new tracker
 
 // How many mobs decided in the last mobs_tick (for the stagger test and the bench)
 extern uint32_t mob_decisions_last_tick;

@@ -61,6 +61,9 @@ typedef struct Entity {
       uint16_t alone_ticks;   // ticks with no player within 32 blocks
       int8_t   swell_dir;     // a creeper: 1 swelling, -1 calming down
       uint8_t  swell;         // ticks of fuse burnt
+      uint8_t  fire;          // ticks left burning
+      uint8_t  bow_ticks;     // ticks left drawing a bow
+      uint16_t provoked;      // ticks it keeps fighting whoever hit it
       PathNode path[8];       // the next steps of its path
     } mob;
     struct { uint16_t item; uint8_t count; } item;
