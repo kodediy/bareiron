@@ -71,6 +71,7 @@ typedef struct Entity {
       uint16_t grow;          // a baby's ticks so far; it grows up at MOB_GROW_TICKS
       uint16_t egg;           // a chicken's ticks to its next egg
       PathNode path[8];       // the next steps of its path
+      PathNode path_to;       // where that path was searched to
     } mob;
     struct { uint16_t item; uint8_t count; } item;
     struct {

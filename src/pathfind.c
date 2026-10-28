@@ -178,7 +178,11 @@ static void expand (int i, PathNode to) {
 
 static int search (PathNode from, PathNode to, PathNode *out, int max_out, int *budget);
 
+uint32_t path_searches = 0;
+
 int path_find (PathNode from, PathNode to, PathNode *out, int max_out, int *budget) {
+  if (*budget <= 0) return PATH_NO_BUDGET;
+  path_searches ++;
   searching = 1;
   int n = search(from, to, out, max_out, budget);
   searching = 0;
@@ -222,7 +226,8 @@ static int search (PathNode from, PathNode to, PathNode *out, int max_out, int *
       }
       return n;
     }
-    if (*budget <= 0 || expanded == PATH_SEARCH_MAX) return -1;
+    if (expanded == PATH_SEARCH_MAX) return -1;
+    if (*budget <= 0) return PATH_NO_BUDGET;
     (*budget) --;
     expanded ++;
     pool[i].closed = 1;

@@ -10,6 +10,7 @@
 #include "procedures.h"
 #include "entity.h"
 #include "mobs.h"
+#include "pathfind.h"
 
 #define FLOOR 200
 
@@ -104,6 +105,19 @@ static void test_creeper_defuses_when_player_leaves (void) {
   CHECK(p->health == 20);
 }
 
+// A chaser far from its target walks the 8 steps it was given; it does not
+// search again every second because those 8 steps end short of the player
+static void test_far_chaser_keeps_its_path (void) {
+  PlayerData *p = setup();
+  p->x = 30; p->z = 10;
+  Entity *z = mob_spawn(E_zombie, (int32_t)(5.5 * ENT_UNIT), (FLOOR + 1) * ENT_UNIT, (int32_t)(10.5 * ENT_UNIT));
+  for (int t = 0; t < 40 && z->u.mob.path_len == 0; t ++) tick();
+  CHECK(z->u.mob.path_len == 8);
+  uint32_t searches = path_searches;
+  for (int t = 0; t < 50 && z->u.mob.path_i < z->u.mob.path_len; t ++) tick();
+  CHECK(path_searches == searches);
+}
+
 // The player shut in a stone box one block thick, roof included
 static void boxIn (const PlayerData *p) {
   for (short x = p->x - 1; x <= p->x + 1; x ++) for (short z = p->z - 1; z <= p->z + 1; z ++)
@@ -140,6 +154,7 @@ int main (void) {
   RUN(test_decisions_are_staggered);
   RUN(test_creeper_explodes_near_player);
   RUN(test_creeper_defuses_when_player_leaves);
+  RUN(test_far_chaser_keeps_its_path);
   RUN(test_creeper_does_not_light_through_a_wall);
   RUN(test_spider_does_not_bite_through_a_wall);
   return CHECK_DONE();

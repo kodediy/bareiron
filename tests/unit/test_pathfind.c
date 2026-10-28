@@ -93,7 +93,7 @@ static void test_path_respects_budget (void) {
   CHECK(budget >= 0);
   CHECK(PATH_TICK_BUDGET - budget <= PATH_SEARCH_MAX);
   budget = 3;
-  CHECK(path_find(node(5, FLOOR + 1, 5), node(25, FLOOR + 1, 25), out, 64, &budget) == -1);
+  CHECK(path_find(node(5, FLOOR + 1, 5), node(25, FLOOR + 1, 25), out, 64, &budget) == PATH_NO_BUDGET);   // try again later
   CHECK(budget == 0);
 }
 

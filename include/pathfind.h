@@ -14,10 +14,15 @@
 #define PATH_TICK_BUDGET 200   // nodes all searches may expand in one tick (one full search)
 #define PATH_SEARCH_MAX 200    // nodes one search may expand
 
+#define PATH_NO_BUDGET -2      // path_find ran out of this tick's budget: ask again next tick
+
 typedef struct { short x; uint8_t y; short z; } PathNode;
 
+extern uint32_t path_searches;   // searches started so far
+
 // Returns the number of nodes written to out (start excluded, the first
-// max_out of the path), 0 if already there, -1 if no path within budget.
+// max_out of the path), 0 if already there, -1 if no path within
+// PATH_SEARCH_MAX expansions, PATH_NO_BUDGET if this tick's budget ran out.
 int path_find (PathNode from, PathNode to, PathNode *out, int max_out, int *budget);
 
 // 1 if a two-block-tall mob can stand with its feet at (x, y, z)

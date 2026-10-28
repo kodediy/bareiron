@@ -157,10 +157,12 @@ static PathNode feetOf (const Entity *e) {
 
 static uint8_t requestPath (Entity *e, int x, int y, int z) {
   if (e->u.mob.path_wait) return 0;
-  e->u.mob.path_wait = MOB_PATH_EVERY;
   PathNode to = { (short)x, (uint8_t)y, (short)z };
   int n = path_find(feetOf(e), to, e->u.mob.path, 8, &path_budget);
+  if (n == PATH_NO_BUDGET) return 0;   // others used this tick's searching: next time, no wait
+  e->u.mob.path_wait = MOB_PATH_EVERY;
   if (n < 0) { e->u.mob.path_len = 0; return 0; }
+  e->u.mob.path_to = to;
   e->u.mob.path_len = (uint8_t)n;
   e->u.mob.path_i = 0;
   return 1;
@@ -317,11 +319,12 @@ static void decide (Entity *e, const MobType *t) {
     if (p) {
       e->u.mob.target = p->client_fd;
       e->u.mob.goal = GOAL_CHASE_MELEE;
-      // A new path when the old one is used up or no longer ends near the player
+      // A new path when the old one is used up or was searched to where the
+      // player no longer is (its 8 steps may end well short of the player)
       uint8_t stale = e->u.mob.path_i >= e->u.mob.path_len;
       if (!stale) {
-        PathNode end = e->u.mob.path[e->u.mob.path_len - 1];
-        stale = abs(end.x - p->x) + abs(end.z - p->z) > 2;
+        PathNode to = e->u.mob.path_to;
+        stale = abs(to.x - p->x) + abs(to.z - p->z) > 2;
       }
       if (stale && d > 1.5) requestPath(e, p->x, p->y, p->z);
       return;
