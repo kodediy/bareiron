@@ -643,6 +643,10 @@ uint16_t getMiningResult (uint16_t held_item, uint8_t block) {
 
   switch (block) {
 
+    case B_gravel:
+      // Flint 1 time in 10, as in vanilla
+      return fast_rand() % 10 == 0 ? I_flint : I_gravel;
+
     case B_short_grass:
       // Shears keep it; otherwise wheat seeds 1 time in 8, as in vanilla
       if (held_item == I_shears) return I_short_grass;

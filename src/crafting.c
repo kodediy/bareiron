@@ -6,6 +6,77 @@
 #include "tools.h"
 #include "crafting.h"
 
+// Shaped recipes as vanilla's: the shape may sit anywhere in the grid, and
+// be mirrored. Patterns are 3x3, 0 for an empty cell.
+typedef struct { uint16_t cells[9]; uint16_t item; uint8_t count; } Shaped;
+
+#define S_ I_stick
+#define T_ I_string
+#define G_ I_gunpowder
+#define A_ I_sand
+#define W_ I_white_wool
+#define P_ I_oak_planks
+static const Shaped shaped[] = {
+  { { 0, S_, T_,  S_, 0, T_,  0, S_, T_ }, I_bow, 1 },
+  { { I_flint, 0, 0,  S_, 0, 0,  I_feather, 0, 0 }, I_arrow, 4 },
+  { { G_, A_, G_,  A_, G_, A_,  G_, A_, G_ }, I_tnt, 1 },
+  { { W_, W_, W_,  P_, P_, P_,  0, 0, 0 }, I_white_bed, 1 },
+};
+#undef S_
+#undef T_
+#undef G_
+#undef A_
+#undef W_
+#undef P_
+
+// The bounding box of the filled cells of a 3x3 grid
+static void bounds (const uint16_t *cells, int *c0, int *r0, int *c1, int *r1) {
+  *c0 = *r0 = 3; *c1 = *r1 = -1;
+  for (int i = 0; i < 9; i ++) {
+    if (!cells[i]) continue;
+    int c = i % 3, r = i / 3;
+    if (c < *c0) *c0 = c;
+    if (c > *c1) *c1 = c;
+    if (r < *r0) *r0 = r;
+    if (r > *r1) *r1 = r;
+  }
+}
+
+static uint8_t shapeMatches (const uint16_t *grid, const uint16_t *pattern, uint8_t mirror) {
+  int gc0, gr0, gc1, gr1, pc0, pr0, pc1, pr1;
+  bounds(grid, &gc0, &gr0, &gc1, &gr1);
+  bounds(pattern, &pc0, &pr0, &pc1, &pr1);
+  if (gc1 - gc0 != pc1 - pc0 || gr1 - gr0 != pr1 - pr0) return false;
+  int w = gc1 - gc0;
+  for (int r = 0; r <= gr1 - gr0; r ++) {
+    for (int c = 0; c <= w; c ++) {
+      int pcol = mirror ? pc0 + (w - c) : pc0 + c;
+      if (grid[(gr0 + r) * 3 + gc0 + c] != pattern[(pr0 + r) * 3 + pcol]) return false;
+    }
+  }
+  return true;
+}
+
+// Recipes added with the mobs (wave 1): shaped ones, then shapeless ones
+static uint8_t wave1Recipe (const uint16_t *grid, uint8_t filled, uint8_t *count, uint16_t *item) {
+  for (size_t i = 0; i < sizeof(shaped) / sizeof(shaped[0]); i ++) {
+    if (shapeMatches(grid, shaped[i].cells, false) || shapeMatches(grid, shaped[i].cells, true)) {
+      *item = shaped[i].item;
+      *count = shaped[i].count;
+      return true;
+    }
+  }
+  uint8_t bone = 0, iron = 0, flint = 0;
+  for (int i = 0; i < 9; i ++) {
+    if (grid[i] == I_bone) bone ++;
+    if (grid[i] == I_iron_ingot) iron ++;
+    if (grid[i] == I_flint) flint ++;
+  }
+  if (filled == 1 && bone == 1) { *item = I_bone_meal; *count = 3; return true; }
+  if (filled == 2 && iron == 1 && flint == 1) { *item = I_flint_and_steel; *count = 1; return true; }
+  return false;
+}
+
 void getCraftingOutput (PlayerData *player, uint8_t *count, uint16_t *item) {
 
   // Exit early if craft_items has been locked
@@ -28,6 +99,8 @@ void getCraftingOutput (PlayerData *player, uint8_t *count, uint16_t *item) {
 
   uint16_t first_item = player->craft_items[first];
   uint8_t first_col = first % 3, first_row = first / 3;
+
+  if (filled && wave1Recipe(player->craft_items, filled, count, item)) return;
 
   switch (filled) {
 
