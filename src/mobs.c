@@ -324,6 +324,19 @@ void mobs_tick (void) {
       ent_remove(e);
       continue;
     }
+    // Vanilla's random despawn: a hostile with nobody within 32 blocks for
+    // 30 s may go, 1 in 800 a tick
+    if (t->category == CAT_MONSTER) {
+      if (d > MOB_DESPAWN_NEAR) {
+        if (e->u.mob.alone_ticks < 0xFFFF) e->u.mob.alone_ticks ++;
+        if (e->u.mob.alone_ticks > MOB_ALONE_TICKS && fast_rand() % 800 == 0) {
+          ent_remove(e);
+          continue;
+        }
+      } else {
+        e->u.mob.alone_ticks = 0;
+      }
+    }
 
     // Hostiles burn in daylight above ground, once a second
     if (t->category == CAT_MONSTER && (world_time < 13000 || world_time > 23460) &&

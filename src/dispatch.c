@@ -33,6 +33,7 @@
 #include "worldgen.h"
 #include "registries.h"
 #include "procedures.h"
+#include "spawning.h"
 #include "serialize.h"
 #include "dispatch.h"
 
@@ -333,43 +334,11 @@ void handlePacket (int client_fd, int length, int packet_id, int state) {
         player->visited_x[VISITED_HISTORY - 1] = _x;
         player->visited_z[VISITED_HISTORY - 1] = _z;
 
-        uint32_t r = fast_rand();
-        // One in every 4 new chunks spawns a mob
-        if ((r & 3) == 0) {
-          // The mob is placed in the middle of the new chunk row,
-          // at a random position within the chunk
-          short mob_x = (_x + dx * VIEW_DISTANCE) * 16 + ((r >> 4) & 15);
-          short mob_z = (_z + dz * VIEW_DISTANCE) * 16 + ((r >> 8) & 15);
-          // Start at the Y coordinate of the spawning player and move upward
-          // until a valid space is found
-          uint8_t mob_y = cy - 8;
-          uint8_t b_low = getBlockAt(mob_x, mob_y - 1, mob_z);
-          uint8_t b_mid = getBlockAt(mob_x, mob_y, mob_z);
-          uint8_t b_top = getBlockAt(mob_x, mob_y + 1, mob_z);
-          while (mob_y < 255) {
-            if ( // Solid block below, non-solid(spawnable) at feet and above
-              !isPassableBlock(b_low) &&
-              isPassableSpawnBlock(b_mid) &&
-              isPassableSpawnBlock(b_top)
-            ) break;
-            b_low = b_mid;
-            b_mid = b_top;
-            b_top = getBlockAt(mob_x, mob_y + 2, mob_z);
-            mob_y ++;
-          }
-          if (mob_y != 255) {
-            // Spawn passive mobs above ground during the day,
-            // or hostiles underground and during the night
-            if ((world_time < 13000 || world_time > 23460) && mob_y > 48) {
-              uint32_t mob_choice = (r >> 12) & 3;
-              if (mob_choice == 0) spawnMob(25, mob_x, mob_y, mob_z, 4); // Chicken
-              else if (mob_choice == 1) spawnMob(28, mob_x, mob_y, mob_z, 10); // Cow
-              else if (mob_choice == 2) spawnMob(95, mob_x, mob_y, mob_z, 10); // Pig
-              else if (mob_choice == 3) spawnMob(106, mob_x, mob_y, mob_z, 8); // Sheep
-            } else {
-              spawnMob(145, mob_x, mob_y, mob_z, 20); // Zombie
-            }
-          }
+        // Animals may come with the chunks entering view (spawning.c);
+        // monsters appear in the dark around players every tick
+        for (int i = -VIEW_DISTANCE; i <= VIEW_DISTANCE; i ++) {
+          if (dx) spawn_chunk_creatures(_x + dx * VIEW_DISTANCE, _z + i);
+          if (dz) spawn_chunk_creatures(_x + i, _z + dz * VIEW_DISTANCE);
         }
 
         int count = 0;

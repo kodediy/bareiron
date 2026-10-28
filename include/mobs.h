@@ -13,6 +13,8 @@
 #define MOB_DECIDE_EVERY 4
 #define MOB_PATH_EVERY 20        // a mob asks for a new path at most this often
 #define MOB_DESPAWN_FAR 128      // a hostile further than this from every player goes at once
+#define MOB_DESPAWN_NEAR 32      // further than this for MOB_ALONE_TICKS, it may go: 1 in 800 a tick
+#define MOB_ALONE_TICKS 600
 
 typedef enum { CAT_MONSTER, CAT_CREATURE, CAT_AMBIENT, CAT_WATER } MobCategory;
 

@@ -23,6 +23,7 @@
 #include "entity.h"
 #include "entitymeta.h"
 #include "mobs.h"
+#include "spawning.h"
 
 int client_states[MAX_CONNECTIONS * 2];
 
@@ -1678,7 +1679,8 @@ void handleServerTick (int64_t time_since_last_tick) {
    */
   if (rng_seed == 0) rng_seed = world_seed;
 
-  // Mobs: physics every tick, decisions every few
+  // Monsters appear in the dark around players; mobs move every tick
+  spawn_tick();
   mobs_tick();
 
   // Entities' movement and who sees them, every few ticks

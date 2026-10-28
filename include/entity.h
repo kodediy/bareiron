@@ -56,6 +56,7 @@ typedef struct Entity {
       uint8_t  path_wait;     // ticks before it may ask for another path
       uint8_t  attack_cd;     // ticks before it may hit again
       uint8_t  look_ticks;    // ticks left looking at a player
+      uint16_t alone_ticks;   // ticks with no player within 32 blocks
       PathNode path[8];       // the next steps of its path
     } mob;
     struct { uint16_t item; uint8_t count; } item;

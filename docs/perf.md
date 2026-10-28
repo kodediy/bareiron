@@ -79,3 +79,14 @@ Cada mob hace física en cada tick, decide cada 4 ticks (escalonados) y pide un 
 | 6 jugadores, 48 mobs (mitad zombis, mitad vacas) | 112 µs | 809 µs |
 
 En el P4 hay que medirlo (Task 16): con un factor de 20 a 40, el peor tick podría rondar los 16-32 ms. Si pasa de 30 ms, se baja `PATH_TICK_BUDGET`.
+
+## Aparición (Plan 5, Task 7)
+
+Los monstruos aparecen solos de noche y en las cuevas: un intento por jugador y tick, con su tope (24 por jugador y 64 en todo el mundo). Con eso, el bench ya no parte de cero: el mundo se llena hasta el tope.
+
+| Mac | Antes de la Task 7 | Ahora |
+|---|---:|---:|
+| `mob_bench`, tick con 6 jugadores (el mundo se llena solo: 44-64 mobs) | 112 µs (48 mobs fijos) | 178-194 µs |
+| Peor vuelta con 6 bots, e2e de carga | 1,5 ms | 5,1 ms |
+
+El salto de la peor vuelta viene sobre todo de los caminos, hasta 600 nodos de A* por tick. En el P4 la Task 16 lo mide y baja `PATH_TICK_BUDGET` si hace falta.

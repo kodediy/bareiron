@@ -102,6 +102,8 @@ static void resetServerState (const BareironConfig *config) {
 // End-to-end tests only (environment variables on the computer): mobs that
 // are there from the start, so a test does not depend on chance
 static void applyTestHooks (void) {
+  const char *time_of_day = getenv("BAREIRON_TEST_TIME");
+  if (time_of_day) world_time = (uint16_t)(atoi(time_of_day) % 24000);
   const char *mobs = getenv("BAREIRON_TEST_MOBS");
   if (!mobs) return;
   short sx, sz;
