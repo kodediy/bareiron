@@ -32,6 +32,9 @@ PLAY_LOGIN = 0x2B
 PLAY_SET_ENTITY_MOTION = 0x5E
 PLAY_TAKE_ITEM_ENTITY = 0x75
 PLAY_SET_CONTAINER_SLOT = 0x14
+PLAY_EXPLODE = 0x20
+PLAY_SET_HEALTH = 0x61
+PLAY_SET_ENTITY_DATA = 0x5C
 PLAY_REMOVE_ENTITIES = 0x46
 PLAY_MOVE_ENTITY_POS = 0x2E
 PLAY_MOVE_ENTITY_POS_ROT = 0x2F
@@ -113,6 +116,8 @@ class Bot:
     self.health = None           # last Set Health
     self.pickups = []            # (item entity id, collector id, count) from Take Item Entity
     self.slots = {}              # player inventory slot -> (item, count), from Set Container Slot
+    self.explosions = []         # (x, y, z) of each Explosion
+    self.metadata = []           # (entity id, raw payload) of each Set Entity Data
 
   # -- transport --------------------------------------------------------
 
@@ -226,6 +231,13 @@ class Bot:
         self.state = "play"
     elif self.state == "play":
       self.packet_times.setdefault(packet_id, []).append(time.monotonic())
+      if packet_id == PLAY_EXPLODE:
+        self.explosions.append(struct.unpack(">ddd", payload[:24]))
+      elif packet_id == PLAY_SET_HEALTH:
+        self.health = struct.unpack(">f", payload[:4])[0]
+      elif packet_id == PLAY_SET_ENTITY_DATA:
+        eid, pos = read_varint(payload, 0)
+        self.metadata.append((eid, bytes(payload[pos:])))
       if packet_id == PLAY_SET_CONTAINER_SLOT:
         window, pos = read_varint(payload, 0)
         _, pos = read_varint(payload, pos)          # state id

@@ -26,6 +26,7 @@ enum {
   GOAL_TEMPT,           // follow a player holding its food
   GOAL_WANDER,          // stroll to a spot within 10 blocks now and then
   GOAL_LOOK_AT_PLAYER,  // turn the head to a player within 8 blocks
+  GOAL_SWELL,           // a creeper: lit within 3 blocks of its target, out past 7, blows at 30 ticks
 };
 
 typedef struct {

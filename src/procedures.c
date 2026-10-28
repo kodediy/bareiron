@@ -27,6 +27,7 @@
 #include "drops.h"
 #include "effects.h"
 #include "arrows.h"
+#include "explosion.h"
 #include "spawning.h"
 
 int client_states[MAX_CONNECTIONS * 2];
@@ -491,6 +492,12 @@ void broadcastPlayerMetadata (PlayerData *player) {
 void ent_send_extra (const Entity *e, int client_fd) {
   if (e->kind == ENT_KIND_ITEM) { drops_send_meta(e, client_fd); return; }
   if (e->kind == ENT_KIND_ARROW) { arrows_send_extra(e, client_fd); return; }
+  if (e->kind == ENT_KIND_TNT) { tnt_send_extra(e, client_fd); return; }
+  if (e->type == E_creeper && e->u.mob.swell_dir > 0) {
+    EntityData state = { META_CREEPER_STATE, META_T_VARINT, { 0 } };
+    state.value.pose = 1;
+    sc_setEntityMetadata(client_fd, e->id, &state, 1);
+  }
   if (e->type == E_sheep && (e->flags & ENT_SHEARED)) {
     EntityData wool = { META_SHEEP_WOOL, META_T_BYTE, { (uint8_t)0x10 } };
     sc_setEntityMetadata(client_fd, e->id, &wool, 1);
@@ -1263,6 +1270,14 @@ void handlePlayerUseItem (PlayerData *player, short x, short y, short z, uint8_t
   uint8_t *count = &player->inventory_count[player->hotbar];
   uint16_t *item = &player->inventory_items[player->hotbar];
 
+  // Flint and steel lights TNT
+  if (face != 255 && target == B_tnt && *item == I_flint_and_steel) {
+    if (makeBlockChange(x, y, z, B_air)) return;
+    tnt_prime(x * ENT_UNIT + ENT_UNIT / 2, y * ENT_UNIT, z * ENT_UNIT + ENT_UNIT / 2, TNT_FUSE, player->client_fd);
+    bumpToolDurability(player);
+    return;
+  }
+
   // A bow is drawn with Use Item and shot when let go (handlePlayerAction 5)
   if (face == 255 && *item == I_bow) {
     bow_start(player);
@@ -1565,6 +1580,7 @@ void handleServerTick (int64_t time_since_last_tick) {
   mobs_tick();
   drops_tick();
   arrows_tick();
+  tnt_tick();
 
   // Entities' movement and who sees them, every few ticks
   ent_network_tick();

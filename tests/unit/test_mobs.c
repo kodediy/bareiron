@@ -79,9 +79,36 @@ static void test_decisions_are_staggered (void) {
   CHECK(worst > 0 && worst <= 11);
 }
 
+static void test_creeper_explodes_near_player (void) {
+  PlayerData *p = setup();
+  Entity *c = mob_spawn(E_creeper, (int32_t)(21.5 * ENT_UNIT), (FLOOR + 1) * ENT_UNIT, (int32_t)(10.5 * ENT_UNIT));
+  CHECK(c != NULL);
+  int32_t id = ent_id(c);
+  int t;
+  for (t = 0; t < 200 && ent_by_id(id); t ++) tick();
+  CHECK(ent_by_id(id) == NULL);     // gone in its own blast
+  CHECK(p->health < 20);
+  CHECK(t >= 30);                   // not before its 1.5 s fuse
+}
+
+static void test_creeper_defuses_when_player_leaves (void) {
+  PlayerData *p = setup();
+  Entity *c = mob_spawn(E_creeper, (int32_t)(23.5 * ENT_UNIT), (FLOOR + 1) * ENT_UNIT, (int32_t)(10.5 * ENT_UNIT));
+  int32_t id = ent_id(c);
+  for (int t = 0; t < 20 && c->u.mob.swell == 0; t ++) tick();
+  CHECK(c->u.mob.swell > 0);        // lit
+  p->x = 3;                         // the player runs off, more than 7 blocks
+  for (int t = 0; t < 60; t ++) tick();
+  CHECK(ent_by_id(id) != NULL);     // it did not go off
+  CHECK(c->u.mob.swell == 0);
+  CHECK(p->health == 20);
+}
+
 int main (void) {
   RUN(test_zombie_reaches_player_and_hits);
   RUN(test_cow_wanders_nearby);
   RUN(test_decisions_are_staggered);
+  RUN(test_creeper_explodes_near_player);
+  RUN(test_creeper_defuses_when_player_leaves);
   return CHECK_DONE();
 }

@@ -108,11 +108,14 @@ static void applyTestHooks (void) {
   if (!mobs) return;
   short sx, sz;
   findSpawnColumn(&sx, &sz);
-  int n = atoi(mobs);
+  // "n" cows, or "type:n" of that entity type
+  const char *colon = strchr(mobs, ':');
+  uint16_t type = colon ? (uint16_t)atoi(mobs) : E_cow;
+  int n = atoi(colon ? colon + 1 : mobs);
   for (int i = 0; i < n; i ++) {
     // a ring 6 blocks out from the spawn
     int x = sx + (int)(6 * cos(i * 6.2831853 / n)), z = sz + (int)(6 * sin(i * 6.2831853 / n));
-    mob_spawn(E_cow, x * ENT_UNIT + ENT_UNIT / 2, (getHeightAt(x, z) + 1) * ENT_UNIT, z * ENT_UNIT + ENT_UNIT / 2);
+    mob_spawn(type, x * ENT_UNIT + ENT_UNIT / 2, (getHeightAt(x, z) + 1) * ENT_UNIT, z * ENT_UNIT + ENT_UNIT / 2);
   }
 }
 #endif

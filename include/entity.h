@@ -59,6 +59,8 @@ typedef struct Entity {
       uint8_t  attack_cd;     // ticks before it may hit again
       uint8_t  look_ticks;    // ticks left looking at a player
       uint16_t alone_ticks;   // ticks with no player within 32 blocks
+      int8_t   swell_dir;     // a creeper: 1 swelling, -1 calming down
+      uint8_t  swell;         // ticks of fuse burnt
       PathNode path[8];       // the next steps of its path
     } mob;
     struct { uint16_t item; uint8_t count; } item;
@@ -70,6 +72,7 @@ typedef struct Entity {
       uint8_t in_ground;
       uint8_t crit;
     } arrow;
+    struct { int32_t lit_by; } tnt;   // the player who lit it, or -1
   } u;
 } Entity;
 

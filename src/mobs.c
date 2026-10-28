@@ -13,6 +13,8 @@
 #include "pathfind.h"
 #include "mobs.h"
 #include "combat.h"
+#include "explosion.h"
+#include "entitymeta.h"
 
 #define BODY(w, h) { w, h, 0.6f, 0.08f, 0.98f }
 
@@ -20,6 +22,8 @@
 static const MobType types[] = {
   { E_zombie, CAT_MONSTER, 20, 0.23f, 3, 35, BODY(0.6f, 1.95f), S_entity_zombie_ambient, 160, { 0 },
     { GOAL_FLOAT, GOAL_CHASE_MELEE, GOAL_WANDER, GOAL_LOOK_AT_PLAYER, 0 }, 2 },
+  { E_creeper, CAT_MONSTER, 20, 0.25f, 0, 16, BODY(0.6f, 1.7f), 0, 160, { 0 },
+    { GOAL_FLOAT, GOAL_SWELL, GOAL_CHASE_MELEE, GOAL_WANDER, GOAL_LOOK_AT_PLAYER, 0 }, 0 },
   { E_cow, CAT_CREATURE, 10, 0.2f, 0, 16, BODY(0.9f, 1.4f), S_entity_cow_ambient, 160, { I_wheat },
     { GOAL_FLOAT, GOAL_PANIC, GOAL_TEMPT, GOAL_WANDER, GOAL_LOOK_AT_PLAYER, 0 } },
   { E_pig, CAT_CREATURE, 10, 0.25f, 0, 16, BODY(0.9f, 0.9f), S_entity_pig_ambient, 160, { I_carrot, I_potato, I_beetroot },
@@ -39,6 +43,9 @@ static const MobType types[] = {
 #define LOOK_RANGE 8
 #define TEMPT_RANGE 10
 #define ATTACK_COOLDOWN 20
+#define SWELL_START 3.0            // a creeper lights this close to its target
+#define SWELL_STOP 7.0             // and calms down past this
+#define SWELL_FUSE 30              // ticks from lit to blast
 
 uint32_t mob_decisions_last_tick = 0;
 static int path_budget;
@@ -223,6 +230,7 @@ static void decide (Entity *e, const MobType *t) {
 }
 
 static void attack (Entity *e, const MobType *t, PlayerData *p) {
+  if (t->attack <= 0) return;   // a creeper does its harm another way
   // Vanilla's reach: (2 x its width)² + the target's width, squared distance
   double dx = p->x + 0.5 - ex(e), dy = p->y - ey(e), dz = p->z + 0.5 - ez(e);
   double reach = (2 * t->body.width) * (2 * t->body.width) + 0.6;
@@ -232,11 +240,61 @@ static void attack (Entity *e, const MobType *t, PlayerData *p) {
   combat_knockback(p->client_fd, ex(e), ez(e), COMBAT_KNOCKBACK);
 }
 
+static void sendCreeperState (const Entity *e, int client_fd) {
+  EntityData state = { META_CREEPER_STATE, META_T_VARINT, { 0 } };
+  state.value.pose = e->u.mob.swell_dir > 0 ? 1 : -1;
+  sc_setEntityMetadata(client_fd, e->id, &state, 1);
+}
+
+static void toTrackers (const Entity *e, void (*send)(const Entity *, int)) {
+  for (int i = 0; i < MAX_PLAYERS; i ++) {
+    if (!(e->seen_by & ((uint64_t)1 << i)) || player_data[i].client_fd == -1) continue;
+    send(e, player_data[i].client_fd);
+  }
+}
+
+static void hiss (const Entity *e, int client_fd) {
+  sc_soundEntity(client_fd, S_entity_creeper_primed, 5, e->id, 1.0f, 0.5f);
+}
+
+// A creeper's fuse. Returns 1 when it went off (and is gone).
+static uint8_t swell (Entity *e, PlayerData *target) {
+  double d = 1e9;
+  if (target) {
+    double dx = target->x + 0.5 - ex(e), dz = target->z + 0.5 - ez(e), dy = target->y - ey(e);
+    d = sqrt(dx * dx + dy * dy + dz * dz);
+  }
+  int8_t dir = e->u.mob.swell_dir;
+  if (target && d < SWELL_START) dir = 1;
+  else if (!target || d > SWELL_STOP) dir = -1;
+  if (dir != e->u.mob.swell_dir) {
+    if (dir > 0 && e->u.mob.swell == 0) toTrackers(e, hiss);
+    e->u.mob.swell_dir = dir;
+    toTrackers(e, sendCreeperState);
+  }
+  if (dir > 0) {
+    if (++ e->u.mob.swell >= SWELL_FUSE) {
+      explode(e->x, e->y, e->z, CREEPER_POWER, e->id);
+      ent_remove(e);
+      return 1;
+    }
+    e->u.mob.path_len = 0;   // it stands still while it swells
+  } else if (e->u.mob.swell) {
+    e->u.mob.swell --;
+  }
+  return 0;
+}
+
 // Every tick: walk the path (or straight at a close target), attack, look
 static void control (Entity *e, const MobType *t) {
   uint8_t goal = e->u.mob.goal;
   float speed = t->speed * speedFor(goal);
   PlayerData *target = (goal == GOAL_CHASE_MELEE || goal == GOAL_TEMPT) ? playerById(e->u.mob.target) : NULL;
+
+  if (hasGoal(t, GOAL_SWELL)) {
+    if (swell(e, goal == GOAL_CHASE_MELEE ? target : NULL)) return;
+    if (e->u.mob.swell_dir > 0) return;
+  }
 
   if (e->u.mob.path_i < e->u.mob.path_len) {
     PathNode n = e->u.mob.path[e->u.mob.path_i];
@@ -350,6 +408,7 @@ void mobs_tick (void) {
 
     if ((server_ticks + i) % MOB_DECIDE_EVERY == 0) decide(e, t);
     control(e, t);
+    if (e->type == 0) continue;   // a creeper that went off
     phys_step(e, &t->body);
     ambientSound(e, t);
   }

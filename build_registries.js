@@ -408,6 +408,16 @@ async function convert () {
 
   const networkBlockPalette = toVarIntBuffer(Object.values(itemsAndBlocks.palette));
 
+  // Blast resistance of each palette block, vanilla 1.21.8's, from
+  // blast_resistance.json (PrismarineJS minecraft-data, pc/1.21.8/blocks.json)
+  const blastSource = JSON.parse(await fs.readFile(`${__dirname}/blast_resistance.json`, "utf8"));
+  const blastAliases = { "snowy_grass_block": "grass_block" };
+  const blastResistance = Object.keys(itemsAndBlocks.palette).map(block => {
+    const name = blastAliases[block] || block.replace(/_\d+$/, "");
+    if (!(name in blastSource)) throw new Error(`no blast resistance for ${block}`);
+    return blastSource[name];
+  });
+
   const sourceCode = `\
 #include <stdint.h>
 #include "registries.h"
@@ -427,6 +437,9 @@ uint16_t block_palette[] = { ${Object.values(itemsAndBlocks.palette).join(", ")}
 uint8_t network_block_palette[] = {
 ${toCArray(networkBlockPalette)}
 };
+
+// Blast resistance per block, vanilla's
+float B_blast_resistance[] = { ${blastResistance.map(r => r.toFixed(1) + "f").join(", ")} };
 
 // Block-to-item mapping
 uint16_t B_to_I[] = { ${itemsAndBlocks.mappingWithOverrides.join(", ")} };
@@ -462,6 +475,7 @@ extern uint8_t tags_bin[${tagBuffer.length}];
 extern uint16_t block_palette[256]; // Block palette
 extern uint8_t network_block_palette[${networkBlockPalette.length}]; // Block palette as VarInt buffer
 extern uint16_t B_to_I[256]; // Block-to-item mapping
+extern float B_blast_resistance[256]; // Vanilla blast resistance of each block
 uint8_t I_to_B (uint16_t item); // Item-to-block mapping
 
 // Block identifiers
@@ -487,6 +501,9 @@ ${defines("S_", registriesReport["minecraft:sound_event"].entries)}
 
 // Mob effect identifiers
 ${defines("MEF_", registriesReport["minecraft:mob_effect"].entries)}
+
+// Particle type identifiers
+${defines("PT_", registriesReport["minecraft:particle_type"].entries)}
 
 #endif
 `;
