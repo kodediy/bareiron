@@ -28,9 +28,6 @@ extern const BareironPlatform *platform;
 // How many clients may be connected at the same time
 #define MAX_CONNECTIONS BAREIRON_MAX_CONNECTIONS
 
-// How many mobs to allocate memory for
-#define MAX_MOBS 16
-
 // Manhattan distance at which mobs despawn
 #define MOB_DESPAWN_DISTANCE 256
 
@@ -219,18 +216,6 @@ typedef struct {
   uint8_t flags;
 } PlayerData;
 
-typedef struct {
-  uint8_t type;
-  short x;
-  // When the mob is dead (health is 0), the Y coordinate acts
-  // as a timer for deleting and deallocating the mob
-  uint8_t y;
-  short z;
-  // Lower 5 bits: health
-  // Middle 1 bit: sheep sheared, unused for other mobs
-  // Upper 2 bits: panic timer
-  uint8_t data;
-} MobData;
 
 #pragma pack(pop)
 
@@ -254,6 +239,5 @@ extern int block_changes_count;
 extern PlayerData player_data[MAX_PLAYERS];
 extern int player_data_count;
 
-extern MobData mob_data[MAX_MOBS];
 
 #endif

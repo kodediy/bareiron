@@ -42,6 +42,7 @@ typedef struct {
   uint16_t port;               // 25565
   uint32_t world_seed;         // used only when there is no saved world
   uint32_t max_block_changes;  // capacity of block_changes
+  uint32_t entity_capacity;    // mobs, items, arrows at once; 0 = 512
   const BareironPlatform *platform;
 } BareironConfig;
 

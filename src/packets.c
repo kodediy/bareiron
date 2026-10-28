@@ -1040,6 +1040,24 @@ int sc_setHeadRotation (int client_fd, int id, uint8_t yaw) {
   return 0;
 }
 
+// S->C Move Entity Position / Position and Rotation: a move of less than 8
+// blocks, in 1/4096 of a block
+int sc_moveEntity (int client_fd, int id, int16_t dx, int16_t dy, int16_t dz,
+                   uint8_t with_rotation, uint8_t yaw, uint8_t pitch, uint8_t on_ground) {
+  writeVarInt(client_fd, 1 + sizeVarInt(id) + 6 + (with_rotation ? 2 : 0) + 1);
+  writeByte(client_fd, with_rotation ? P_move_entity_pos_rot : P_move_entity_pos);
+  writeVarInt(client_fd, id);
+  writeUint16(client_fd, (uint16_t)dx);
+  writeUint16(client_fd, (uint16_t)dy);
+  writeUint16(client_fd, (uint16_t)dz);
+  if (with_rotation) {
+    writeByte(client_fd, yaw);
+    writeByte(client_fd, pitch);
+  }
+  writeByte(client_fd, on_ground);
+  return 0;
+}
+
 // S->C Set Head Rotation
 int sc_updateEntityRotation (int client_fd, int id, uint8_t yaw, uint8_t pitch) {
 

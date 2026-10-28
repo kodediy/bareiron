@@ -27,6 +27,10 @@ PLAY_DISCONNECT = 0x1C
 PLAY_SET_TIME = 0x6A         # Update Time
 PLAY_TELEPORT_ENTITY = 0x76
 PLAY_ENTITY_POSITION_SYNC = 0x1F   # what bareiron sends for another player's move
+PLAY_ADD_ENTITY = 0x01
+PLAY_REMOVE_ENTITIES = 0x46
+PLAY_MOVE_ENTITY_POS = 0x2E
+PLAY_MOVE_ENTITY_POS_ROT = 0x2F
 
 # Serverbound
 SB_CONFIG_CLIENT_INFO = 0x00
@@ -96,6 +100,9 @@ class Bot:
     self.state = "none"
     self.packet_times = {}       # play packet id -> monotonic timestamps
     self.time_of_day = []        # (monotonic, time of day) from Update Time
+    self.entities = {}           # entity id -> {"type", "x", "y", "z"} for what is spawned
+    self.duplicate_spawns = 0    # Spawn Entity for an id already spawned
+    self.removed = []            # ids removed, in order
 
   # -- transport --------------------------------------------------------
 
@@ -209,6 +216,33 @@ class Bot:
         self.state = "play"
     elif self.state == "play":
       self.packet_times.setdefault(packet_id, []).append(time.monotonic())
+      if packet_id == PLAY_ADD_ENTITY:
+        eid, pos = read_varint(payload, 0)
+        pos += 16                               # uuid
+        etype, pos = read_varint(payload, pos)
+        x, y, z = struct.unpack(">ddd", payload[pos:pos + 24])
+        if eid in self.entities:
+          self.duplicate_spawns += 1
+        self.entities[eid] = {"type": etype, "x": x, "y": y, "z": z}
+      elif packet_id == PLAY_REMOVE_ENTITIES:
+        count, pos = read_varint(payload, 0)
+        for _ in range(count):
+          eid, pos = read_varint(payload, pos)
+          self.entities.pop(eid, None)
+          self.removed.append(eid)
+      elif packet_id in (PLAY_MOVE_ENTITY_POS, PLAY_MOVE_ENTITY_POS_ROT):
+        eid, pos = read_varint(payload, 0)
+        dx, dy, dz = struct.unpack(">hhh", payload[pos:pos + 6])
+        if eid in self.entities:
+          e = self.entities[eid]
+          e["x"] += dx / 4096.0
+          e["y"] += dy / 4096.0
+          e["z"] += dz / 4096.0
+      elif packet_id == PLAY_ENTITY_POSITION_SYNC:
+        eid, pos = read_varint(payload, 0)
+        x, y, z = struct.unpack(">ddd", payload[pos:pos + 24])
+        if eid in self.entities:
+          self.entities[eid].update(x=x, y=y, z=z)
       if packet_id == PLAY_SET_TIME:
         _, day_time = struct.unpack(">qq", payload[:16])
         self.time_of_day.append((time.monotonic(), day_time))

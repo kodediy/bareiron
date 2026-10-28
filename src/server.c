@@ -27,6 +27,7 @@
 #include "globals.h"
 #include "tools.h"
 #include "varnum.h"
+#include "entity.h"
 #include "procedures.h"
 #include "serialize.h"
 #include "dispatch.h"
@@ -90,7 +91,7 @@ static void resetServerState (const BareironConfig *config) {
     client_states[i * 2] = -1;
     client_states[i * 2 + 1] = 0;
   }
-  memset(mob_data, 0, sizeof(mob_data));
+  ent_clear();
 }
 
 // Sends whatever each client has queued, and drops clients whose
@@ -249,6 +250,13 @@ int bareiron_run (const BareironConfig *config) {
     stop_requested = 0;
     return BAREIRON_ERR_NO_MEMORY;
   }
+  if (ent_init(config->entity_capacity)) {
+    bc_index_free();
+    platform->free_large(block_changes);
+    block_changes = NULL;
+    stop_requested = 0;
+    return BAREIRON_ERR_NO_MEMORY;
+  }
 
   resetServerState(config);
   statusReset();
@@ -258,6 +266,7 @@ int bareiron_run (const BareironConfig *config) {
   // Pick up the saved world, if there is one
   int loaded = loadWorld();
   if (loaded < 0) {
+    ent_free();
     bc_index_free();
     platform->free_large(block_changes);
     block_changes = NULL;
@@ -268,6 +277,7 @@ int bareiron_run (const BareironConfig *config) {
 
   int server_fd = openServerSocket(config->port);
   if (server_fd < 0) {
+    ent_free();
     bc_index_free();
     platform->free_large(block_changes);
     block_changes = NULL;
@@ -342,6 +352,7 @@ int bareiron_run (const BareironConfig *config) {
   saveWorldNow();
   close(server_fd);
 
+  ent_free();
   bc_index_free();
   platform->free_large(block_changes);
   block_changes = NULL;

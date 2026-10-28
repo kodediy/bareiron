@@ -20,6 +20,8 @@
 #include "status.h"
 #include "dispatch.h"
 #include "net.h"
+#include "entity.h"
+#include "entitymeta.h"
 
 int client_states[MAX_CONNECTIONS * 2];
 
@@ -165,6 +167,8 @@ void handlePlayerDisconnect (int client_fd) {
     uint8_t was_in_game = !(player_data[i].flags & 0x20);
     // Mark the player as being offline
     player_data[i].client_fd = -1;
+    // Whatever it was tracking is not on its screen any more
+    ent_untrack_player(&player_data[i]);
     // Prepare leave message for broadcast
     uint8_t player_name_len = strlen(player_data[i].name);
     strcpy((char *)recv_buffer, player_data[i].name);
@@ -461,48 +465,24 @@ void broadcastPlayerMetadata (PlayerData *player) {
 
 // Sends a mob's entity metadata to the given player.
 // If client_fd is -1, broadcasts to all player
+// What a player is sent right after an entity's Spawn Entity
+void ent_send_extra (const Entity *e, int client_fd) {
+  if (e->type == E_sheep && (e->flags & ENT_SHEARED)) {
+    EntityData wool = { META_SHEEP_WOOL, META_T_BYTE, { (uint8_t)0x10 } };
+    sc_setEntityMetadata(client_fd, e->id, &wool, 1);
+  }
+}
+
+// Sends an entity's metadata to everyone who has it spawned
 void broadcastMobMetadata (int client_fd, int entity_id) {
-
-  int mob_index = -entity_id - 2;
-  if (mob_index < 0 || mob_index >= MAX_MOBS) return;
-  MobData *mob = &mob_data[mob_index];
-
-  EntityData *metadata;
-  size_t length;
-
-  switch (mob->type) {
-    case 106: // Sheep
-      if (!((mob->data >> 5) & 1)) // Don't send metadata if sheep isn't sheared
-        return;
-
-      metadata = malloc(sizeof *metadata);
-      metadata[0] = (EntityData){
-        17,                // Index (Sheep Bit Mask),
-        0,                 // Type (Byte),
-        { (uint8_t)0x10 }, // Value
-      };
-      length = 1;
-
-      break;
-
-    default: return;
+  Entity *e = ent_by_id(entity_id);
+  if (!e) return;
+  if (client_fd != -1) { ent_send_extra(e, client_fd); return; }
+  for (int i = 0; i < MAX_PLAYERS; i ++) {
+    if (!(e->seen_by & ((uint64_t)1 << i))) continue;
+    if (player_data[i].client_fd == -1) continue;
+    ent_send_extra(e, player_data[i].client_fd);
   }
-
-  if (client_fd == -1) {
-    for (int i = 0; i < MAX_PLAYERS; i ++) {
-      PlayerData* player = &player_data[i];
-      client_fd = player->client_fd;
-
-      if (client_fd == -1) continue;
-      if (player->flags & 0x20) continue;
-
-      sc_setEntityMetadata(client_fd, entity_id, metadata, length);
-    }
-  } else {
-    sc_setEntityMetadata(client_fd, entity_id, metadata, length);
-  }
-
-  free(metadata);
 }
 
 uint8_t getBlockChange (short x, uint8_t y, short z) {
@@ -1413,45 +1393,12 @@ void handlePlayerUseItem (PlayerData *player, short x, short y, short z, uint8_t
 
 }
 
-void spawnMob (uint8_t type, short x, uint8_t y, short z, uint8_t health) {
-
-  for (int i = 0; i < MAX_MOBS; i ++) {
-    // Look for type 0 (unallocated)
-    if (mob_data[i].type != 0) continue;
-
-    // Assign it the input parameters
-    mob_data[i].type = type;
-    mob_data[i].x = x;
-    mob_data[i].y = y;
-    mob_data[i].z = z;
-    mob_data[i].data = health & 31;
-
-    // Forge a UUID from a random number and the mob's index
-    uint8_t uuid[16];
-    uint32_t r = fast_rand();
-    memcpy(uuid, &r, 4);
-    memcpy(uuid + 4, &i, 4);
-
-    // Broadcast entity creation to all players
-    for (int j = 0; j < MAX_PLAYERS; j ++) {
-      if (player_data[j].client_fd == -1) continue;
-      sc_spawnEntity(
-        player_data[j].client_fd,
-        -2 - i, // Use negative IDs to avoid conflicts with player IDs
-        uuid, // Use the UUID generated above
-        type, (double)x + 0.5f, y, (double)z + 0.5f,
-        // Face opposite of the player, as if looking at them when spawning
-        (player_data[j].yaw + 127) & 255, 0
-      );
-    }
-
-    // Freshly spawned mobs currently don't need metadata updates.
-    // If this changes, uncomment this line.
-    // broadcastMobMetadata(-1, i);
-
-    break;
-  }
-
+void spawnMob (uint16_t type, short x, uint8_t y, short z, uint8_t health) {
+  Entity *e = ent_spawn(type,
+    x * ENT_UNIT + ENT_UNIT / 2, y * ENT_UNIT, z * ENT_UNIT + ENT_UNIT / 2);
+  if (!e) return;
+  e->health = health;
+  // Spawned to each player by the next network turn (entity.c)
 }
 
 void interactEntity (int entity_id, int interactor_id) {
@@ -1459,24 +1406,24 @@ void interactEntity (int entity_id, int interactor_id) {
   PlayerData *player;
   if (getPlayerData(interactor_id, &player)) return;
 
-  int mob_index = -entity_id - 2;
-  if (mob_index < 0 || mob_index >= MAX_MOBS) return;
-  MobData *mob = &mob_data[mob_index];
+  Entity *mob = ent_by_id(entity_id);
+  if (!mob) return;
 
   switch (mob->type) {
-    case 106: // Sheep
+    case E_sheep:
       if (player->inventory_items[player->hotbar] != I_shears)
         return;
 
-      if ((mob->data >> 5) & 1) // Check if sheep has already been sheared
+      if (mob->flags & ENT_SHEARED) // Check if sheep has already been sheared
         return;
 
-      mob->data |= 1 << 5; // Set sheared to true
+      mob->flags |= ENT_SHEARED;
 
       bumpToolDurability(player);
 
       #ifdef ENABLE_PICKUP_ANIMATION
-      playPickupAnimation(player, I_white_wool, mob->x, mob->y, mob->z);
+      playPickupAnimation(player, I_white_wool,
+        (double)mob->x / ENT_UNIT, (double)mob->y / ENT_UNIT, (double)mob->z / ENT_UNIT);
       #endif
 
       uint8_t item_count = 1 + (fast_rand() & 1); // 1-2
@@ -1592,23 +1539,21 @@ void hurtEntity (int entity_id, int attacker_id, uint8_t damage_type, uint8_t da
 
   } else { // The attacked entity is a mob
 
-    int mob_index = -entity_id - 2;
-    if (mob_index < 0 || mob_index >= MAX_MOBS) return;
-    MobData *mob = &mob_data[mob_index];
-
-    uint8_t mob_health = mob->data & 31;
+    Entity *mob = ent_by_id(entity_id);
+    if (!mob) return;
 
     // Don't continue if the mob is already dead
-    if (mob_health == 0) return;
+    if (mob->flags & ENT_DEAD) return;
 
     // Set the mob's panic timer
-    mob->data |= (3 << 6);
+    mob->u.mob.panic = 3;
 
     // Process health change on the server
-    if (mob_health <= damage) {
+    if (mob->health <= damage) {
 
-      mob->data -= mob_health;
-      mob->y = 0;
+      mob->health = 0;
+      mob->flags |= ENT_DEAD;
+      mob->timer = 0;   // counts the death animation's ticks
       entity_died = true;
 
       // Handle mob drops
@@ -1616,16 +1561,16 @@ void hurtEntity (int entity_id, int attacker_id, uint8_t damage_type, uint8_t da
         PlayerData *player;
         if (getPlayerData(attacker_id, &player)) return;
         switch (mob->type) {
-          case 25: givePlayerItem(player, I_chicken, 1); break;
-          case 28: givePlayerItem(player, I_beef, 1 + (fast_rand() % 3)); break;
-          case 95: givePlayerItem(player, I_porkchop, 1 + (fast_rand() % 3)); break;
-          case 106: givePlayerItem(player, I_mutton, 1 + (fast_rand() & 1)); break;
-          case 145: givePlayerItem(player, I_rotten_flesh, (fast_rand() % 3)); break;
+          case E_chicken: givePlayerItem(player, I_chicken, 1); break;
+          case E_cow: givePlayerItem(player, I_beef, 1 + (fast_rand() % 3)); break;
+          case E_pig: givePlayerItem(player, I_porkchop, 1 + (fast_rand() % 3)); break;
+          case E_sheep: givePlayerItem(player, I_mutton, 1 + (fast_rand() & 1)); break;
+          case E_zombie: givePlayerItem(player, I_rotten_flesh, (fast_rand() % 3)); break;
           default: break;
         }
       }
 
-    } else mob->data -= damage;
+    } else mob->health -= damage;
 
   }
 
@@ -1735,40 +1680,46 @@ void handleServerTick (int64_t time_since_last_tick) {
   if (rng_seed == 0) rng_seed = world_seed;
 
   // Tick mob behavior
-  for (int i = 0; i < MAX_MOBS; i ++) {
-    if (mob_data[i].type == 0) continue;
-    int entity_id = -2 - i;
+  for (uint32_t i = 0; i < ent_capacity(); i ++) {
+    Entity *mob = ent_at(i);
+    if (mob->type == 0 || mob->kind != ENT_KIND_MOB) continue;
+    int entity_id = mob->id;
+    mob->age ++;
 
-    // Handle deallocation on mob death
-    if ((mob_data[i].data & 31) == 0) {
-      if (mob_data[i].y < (unsigned int)TICKS_PER_SECOND) {
-        mob_data[i].y ++;
+    // Handle deallocation on mob death, a second after it
+    if (mob->flags & ENT_DEAD) {
+      if (mob->timer < (unsigned int)TICKS_PER_SECOND) {
+        mob->timer ++;
         continue;
       }
-      mob_data[i].type = 0;
       for (int j = 0; j < MAX_PLAYERS; j ++) {
+        if (!(mob->seen_by & ((uint64_t)1 << j))) continue;
         if (player_data[j].client_fd == -1) continue;
         // Spawn death smoke particles
         sc_entityEvent(player_data[j].client_fd, entity_id, 60);
-        // Remove the entity from the client
-        sc_removeEntity(player_data[j].client_fd, entity_id);
       }
+      ent_remove(mob);
       continue;
     }
 
     uint8_t passive = (
-      mob_data[i].type == 25 || // Chicken
-      mob_data[i].type == 28 || // Cow
-      mob_data[i].type == 95 || // Pig
-      mob_data[i].type == 106 // Sheep
+      mob->type == E_chicken ||
+      mob->type == E_cow ||
+      mob->type == E_pig ||
+      mob->type == E_sheep
     );
     // Mob "panic" timer, set to 3 after being hit
     // Currently has no effect on hostile mobs
-    uint8_t panic = (mob_data[i].data >> 6) & 3;
+    uint8_t panic = mob->u.mob.panic;
 
-    // Burn hostile mobs if above ground during sunlight
-    if (!passive && (world_time < 13000 || world_time > 23460) && mob_data[i].y > 48) {
+    short mob_x = (short)(mob->x >> 12), mob_z = (short)(mob->z >> 12);
+    uint8_t mob_y = (uint8_t)(mob->y >> 12);
+
+    // Burn hostile mobs if above ground during sunlight, once a second
+    if (!passive && (world_time < 13000 || world_time > 23460) && mob_y > 48 &&
+        server_ticks % (uint32_t)TICKS_PER_SECOND == 0) {
       hurtEntity(entity_id, -1, D_on_fire, 2);
+      if (mob->flags & ENT_DEAD) continue;
     }
 
     uint32_t r = fast_rand();
@@ -1783,7 +1734,7 @@ void handleServerTick (int64_t time_since_last_tick) {
         // Reset panic state after timer runs out
         // Each panic timer tick takes one second
         if (server_ticks % (uint32_t)TICKS_PER_SECOND == 0) {
-          mob_data[i].data -= (1 << 6);
+          mob->u.mob.panic --;
         }
       } else {
         // When not panicking, move idly once per 4 seconds on average
@@ -1800,8 +1751,8 @@ void handleServerTick (int64_t time_since_last_tick) {
     for (int j = 0; j < MAX_PLAYERS; j ++) {
       if (player_data[j].client_fd == -1) continue;
       uint16_t curr_dist = (
-        abs(mob_data[i].x - player_data[j].x) +
-        abs(mob_data[i].z - player_data[j].z)
+        abs(mob_x - player_data[j].x) +
+        abs(mob_z - player_data[j].z)
       );
       if (curr_dist < closest_dist) {
         closest_dist = curr_dist;
@@ -1811,16 +1762,15 @@ void handleServerTick (int64_t time_since_last_tick) {
 
     // Despawn mobs past a certain distance from nearest player
     if (closest_dist > MOB_DESPAWN_DISTANCE) {
-      mob_data[i].type = 0;
+      ent_remove(mob);
       continue;
     }
 
-    short old_x = mob_data[i].x, old_z = mob_data[i].z;
-    uint8_t old_y = mob_data[i].y;
+    short old_x = mob_x, old_z = mob_z;
+    uint8_t old_y = mob_y;
 
     short new_x = old_x, new_z = old_z;
     uint8_t new_y = old_y, yaw = 0;
-
     if (passive) { // Passive mob movement handling
 
       // Move by one block on the X or Z axis
@@ -1911,17 +1861,17 @@ void handleServerTick (int64_t time_since_last_tick) {
     else if (isPassableBlock(getBlockAt(new_x, new_y - 1, new_z))) new_y -= 1;
 
     // Exit early if all movement was cancelled
-    if (new_x == mob_data[i].x && new_z == old_z && new_y == old_y) continue;
+    if (new_x == old_x && new_z == old_z && new_y == old_y) continue;
 
     // Prevent collisions with other mobs
     uint8_t colliding = false;
-    for (int j = 0; j < MAX_MOBS; j ++) {
-      if (j == i) continue;
-      if (mob_data[j].type == 0) continue;
+    for (uint32_t j = 0; j < ent_capacity(); j ++) {
+      Entity *other = ent_at(j);
+      if (j == i || other->type == 0 || other->kind != ENT_KIND_MOB) continue;
       if (
-        mob_data[j].x == new_x &&
-        mob_data[j].z == new_z &&
-        abs((int)mob_data[j].y - (int)new_y) < 2
+        (other->x >> 12) == new_x &&
+        (other->z >> 12) == new_z &&
+        abs((int)(other->y >> 12) - (int)new_y) < 2
       ) {
         colliding = true;
         break;
@@ -1934,26 +1884,20 @@ void handleServerTick (int64_t time_since_last_tick) {
       (block_above >= B_lava && block_above < B_lava + 4)
     ) hurtEntity(entity_id, -1, D_lava, 8);
 
-    // Store new mob position
-    mob_data[i].x = new_x;
-    mob_data[i].y = new_y;
-    mob_data[i].z = new_z;
+    // Store new mob position, in the middle of its block
+    mob->x = new_x * ENT_UNIT + ENT_UNIT / 2;
+    mob->y = new_y * ENT_UNIT;
+    mob->z = new_z * ENT_UNIT + ENT_UNIT / 2;
 
     // Vary the yaw angle to look just a little less robotic
     yaw += ((r >> 7) & 31) - 16;
-
-    // Broadcast relevant entity movement packets
-    for (int j = 0; j < MAX_PLAYERS; j ++) {
-      if (player_data[j].client_fd == -1) continue;
-      sc_teleportEntity (
-        player_data[j].client_fd, entity_id,
-        (double)new_x + 0.5, new_y, (double)new_z + 0.5,
-        yaw * 360 / 256, 0
-      );
-      sc_setHeadRotation(player_data[j].client_fd, entity_id, yaw);
-    }
+    mob->yaw = mob->head_yaw = yaw;
+    ent_moved(mob);
 
   }
+
+  // Entities' movement and who sees them, every few ticks
+  ent_network_tick();
 
 }
 
