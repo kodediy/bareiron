@@ -341,7 +341,9 @@ int bareiron_run (const BareironConfig *config) {
     acceptClient(server_fd, clients);
 
     // A few queued chunks per iteration, never a whole join at once
+    int64_t chunks_start = get_program_time();
     cq_pump(CHUNKS_PER_ITERATION);
+    PROFILE_MAX(chunks, get_program_time() - chunks_start);
 
     // Handle periodic events (server ticks), with or without players. Ticks
     // keep a fixed pace: one that runs late is caught up, a few at most per
@@ -349,10 +351,13 @@ int bareiron_run (const BareironConfig *config) {
     int64_t now = get_program_time();
     int caught_up = 0;
     while (now - last_tick_time >= TIME_BETWEEN_TICKS && caught_up < MAX_CATCHUP_TICKS) {
+      int64_t tick_start = get_program_time();
       handleServerTick(TIME_BETWEEN_TICKS);
+      PROFILE_MAX(tick, get_program_time() - tick_start);
       last_tick_time += TIME_BETWEEN_TICKS;
       caught_up ++;
     }
+    PROFILE_MAX(catchup, caught_up);
     if (now - last_tick_time >= TIME_BETWEEN_TICKS) last_tick_time = now;
 
     for (int i = 0; i < MAX_CONNECTIONS; i ++) {

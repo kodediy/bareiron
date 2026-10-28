@@ -1,6 +1,7 @@
 #include <string.h>
 
 #include "globals.h"
+#include "entity.h"
 #include "tools.h"
 #include "status.h"
 
@@ -70,6 +71,8 @@ void statusPlayerLeft (PlayerData *player) {
   statusEmit(BAREIRON_EVT_PLAYER_LEAVE, player->name, 0);
 }
 
+TickProfile tick_profile;
+
 void statusUpdate (uint32_t loop_max_us) {
   uint32_t used = 0;
   for (int i = 0; i < block_changes_count; i ++) {
@@ -80,7 +83,16 @@ void statusUpdate (uint32_t loop_max_us) {
   status.world_time = world_time;
   status.loop_max_us = loop_max_us;
   status.block_changes_used = used;
+  status.tick_max_us = tick_profile.tick;
+  status.spawn_max_us = tick_profile.spawn;
+  status.mobs_max_us = tick_profile.mobs;
+  status.things_max_us = tick_profile.things;
+  status.net_max_us = tick_profile.net;
+  status.chunks_max_us = tick_profile.chunks;
+  status.catchup_max = tick_profile.catchup;
+  status.entities = (uint16_t)ent_count();
   platform->unlock();
+  memset(&tick_profile, 0, sizeof(tick_profile));
 }
 
 void bareiron_get_status (BareironStatus *out) {

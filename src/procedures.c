@@ -1609,15 +1609,23 @@ void handleServerTick (int64_t time_since_last_tick) {
   if (rng_seed == 0) rng_seed = world_seed;
 
   // Monsters appear in the dark around players; mobs move every tick
+  int64_t t0 = get_program_time();
   spawn_tick();
+  int64_t t1 = get_program_time();
   mobs_tick();
+  int64_t t2 = get_program_time();
   drops_tick();
   arrows_tick();
   tnt_tick();
   beds_tick();
+  PROFILE_MAX(spawn, t1 - t0);
+  PROFILE_MAX(mobs, t2 - t1);
+  PROFILE_MAX(things, get_program_time() - t2);
 
   // Entities' movement and who sees them, every few ticks
+  int64_t t3 = get_program_time();
   ent_network_tick();
+  PROFILE_MAX(net, get_program_time() - t3);
 
 }
 

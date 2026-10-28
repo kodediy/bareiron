@@ -42,9 +42,13 @@ static void printEvent (const BareironEvent *event) {
 static void printStatus (void) {
   BareironStatus status;
   bareiron_get_status(&status);
-  printf("STATUS {\"running\":%s,\"player_count\":%d,\"world_time\":%d,\"loop_max_us\":%u,\"block_changes_used\":%u,\"players\":[",
+  printf("STATUS {\"running\":%s,\"player_count\":%d,\"world_time\":%d,\"loop_max_us\":%u,\"block_changes_used\":%u,"
+    "\"tick_max_us\":%u,\"spawn_max_us\":%u,\"mobs_max_us\":%u,\"things_max_us\":%u,\"net_max_us\":%u,"
+    "\"chunks_max_us\":%u,\"catchup_max\":%u,\"entities\":%u,\"players\":[",
     status.running ? "true" : "false", status.player_count, status.world_time,
-    status.loop_max_us, status.block_changes_used);
+    status.loop_max_us, status.block_changes_used,
+    status.tick_max_us, status.spawn_max_us, status.mobs_max_us, status.things_max_us, status.net_max_us,
+    status.chunks_max_us, status.catchup_max, status.entities);
   for (int i = 0; i < status.player_count; i ++) {
     BareironPlayerInfo *player = &status.players[i];
     printf("%s{\"name\":\"%s\",\"x\":%d,\"y\":%d,\"z\":%d}", i ? "," : "", player->name, player->x, player->y, player->z);

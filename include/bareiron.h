@@ -65,6 +65,12 @@ typedef struct {
   int64_t  started_us;
   uint32_t loop_max_us;                          // worst loop iteration in the last second
   uint32_t block_changes_used;
+  // Where the time goes: the worst of each in the last second, in microseconds
+  uint32_t tick_max_us;                          // one server tick, all of it
+  uint32_t spawn_max_us, mobs_max_us, things_max_us, net_max_us;  // parts of a tick
+  uint32_t chunks_max_us;                        // chunks sent in one loop iteration
+  uint8_t  catchup_max;                          // most ticks run in one iteration
+  uint16_t entities;                             // mobs, items, arrows alive
 } BareironStatus;
 
 // Error codes returned by bareiron_run

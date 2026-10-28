@@ -50,6 +50,19 @@ class StatusApiTest(unittest.TestCase):
       for bot in bots:
         bot.close()
 
+  def test_status_profiles_the_tick(self):
+    """The status says where a tick's time goes, and how many entities there are."""
+    with ServerProcess(PORT, env={"BAREIRON_TEST_MOBS": "3"}) as server:
+      bot = Bot(port=PORT, name="profiled")
+      bot.login()
+      bot.pump(2.5)
+      status = server.status()
+      for key in ("tick_max_us", "mobs_max_us", "spawn_max_us", "net_max_us", "chunks_max_us", "catchup_max"):
+        self.assertIn(key, status)
+      self.assertGreater(status["tick_max_us"], 0)
+      self.assertGreaterEqual(status["entities"], 3)
+      bot.close()
+
   def test_server_list_shows_count(self):
     with ServerProcess(PORT):
       bot = Bot(port=PORT, name="online")
