@@ -28,9 +28,11 @@ float block_blast_resistance (uint8_t block) {
 }
 
 // The blocks this explosion breaks, each once
-static struct { short x; uint8_t y; short z; } broken[MAX_BROKEN];
+// In big memory (PSRAM on the Kode Dot), taken on the first explosion
+typedef struct { short x; uint8_t y; short z; } BrokenBlock;
+static BrokenBlock *broken = NULL;
 static int broken_n;
-static int16_t broken_slot[BROKEN_HASH];
+static int16_t *broken_slot = NULL;
 
 static void markBroken (int x, int y, int z) {
   unsigned h = ((unsigned)(x * 73856093) ^ (unsigned)(y * 19349663) ^ (unsigned)(z * 83492791)) & (BROKEN_HASH - 1);
@@ -126,8 +128,13 @@ static void sendExplosion (double x, double y, double z, float power) {
 
 void explode (int32_t ex, int32_t ey, int32_t ez, float power, int32_t source_id) {
   double cx = (double)ex / ENT_UNIT, cy = (double)ey / ENT_UNIT, cz = (double)ez / ENT_UNIT;
+  if (!broken) {
+    broken = platform->alloc_large(MAX_BROKEN * sizeof(BrokenBlock));
+    broken_slot = platform->alloc_large(BROKEN_HASH * sizeof(int16_t));
+    if (!broken || !broken_slot) { broken = NULL; return; }
+  }
   broken_n = 0;
-  memset(broken_slot, 0xFF, sizeof(broken_slot));
+  memset(broken_slot, 0xFF, BROKEN_HASH * sizeof(int16_t));
   castRays(cx, cy, cz, power);
 
   sendExplosion(cx, cy, cz, power);

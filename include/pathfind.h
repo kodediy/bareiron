@@ -11,7 +11,7 @@
 // Every node expanded costs one from *budget, which the caller shares out
 // over a tick; a single search also stops at PATH_SEARCH_MAX expansions.
 
-#define PATH_TICK_BUDGET 600   // nodes all searches may expand in one tick
+#define PATH_TICK_BUDGET 200   // nodes all searches may expand in one tick (one full search)
 #define PATH_SEARCH_MAX 200    // nodes one search may expand
 
 typedef struct { short x; uint8_t y; short z; } PathNode;

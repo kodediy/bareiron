@@ -22,25 +22,56 @@ typedef struct {
   uint8_t closed;
 } Node;
 
-static Node pool[POOL];
+// The search's memory lives in big memory (PSRAM on the Kode Dot), where
+// it does not take internal RAM the network needs
+typedef struct {
+  Node pool[POOL];
+  int16_t hash_slot[HASH];
+  int heap[POOL];
+} SearchMemory;
+static SearchMemory *mem = NULL;
+#define pool (mem->pool)
+#define hash_slot (mem->hash_slot)
+#define heap (mem->heap)
 static int pool_used;
-static int16_t hash_slot[HASH];   // index into pool, -1 empty
-static int heap[POOL];
 static int heap_size;
 
 static int isLava (uint8_t b) { return b >= B_lava && b < B_lava + 4; }
+
+// The blocks one search has looked at: neighbouring nodes ask for the same
+// ones again and again, and on the Kode Dot a lookup costs microseconds
+#define BLOCK_CACHE 1024
+typedef struct { short x, z; uint8_t y, block; uint16_t gen; } CachedBlock;
+static CachedBlock *block_cache = NULL;
+static uint16_t cache_gen = 0;   // a new search makes every older entry stale
+
+static uint8_t blockAt (int x, int y, int z) {
+  if (y < 0 || y > 255) return getBlockAt(x, y, z);
+  unsigned h = ((unsigned)(x * 73856093) ^ (unsigned)(y * 19349663) ^ (unsigned)(z * 83492791)) & (BLOCK_CACHE - 1);
+  CachedBlock *c = &block_cache[h];
+  if (c->gen == cache_gen && c->x == x && c->y == y && c->z == z) return c->block;
+  uint8_t b = getBlockAt(x, y, z);
+  c->x = (short)x; c->y = (uint8_t)y; c->z = (short)z; c->block = b; c->gen = cache_gen;
+  return b;
+}
+
+// The cache only holds during a search; outside one the world may have changed
+static uint8_t searching = 0;
+static uint8_t lookup (int x, int y, int z) {
+  return searching ? blockAt(x, y, z) : getBlockAt(x, y, z);
+}
 
 // Room for feet or head: passable and not lava
 static int open (int x, int y, int z) {
   if (y > 255) return 1;
   if (y < 0) return 0;
-  uint8_t b = getBlockAt(x, y, z);
+  uint8_t b = lookup(x, y, z);
   return isPassableBlock(b) && !isLava(b);
 }
 
 int path_standable (int x, int y, int z) {
   if (y < 1 || y > 254) return 0;
-  uint8_t below = getBlockAt(x, y - 1, z);
+  uint8_t below = lookup(x, y - 1, z);
   if (isPassableBlock(below) || isLava(below)) return 0;
   return open(x, y, z) && open(x, y + 1, z);
 }
@@ -145,9 +176,28 @@ static void expand (int i, PathNode to) {
   }
 }
 
+static int search (PathNode from, PathNode to, PathNode *out, int max_out, int *budget);
+
 int path_find (PathNode from, PathNode to, PathNode *out, int max_out, int *budget) {
+  searching = 1;
+  int n = search(from, to, out, max_out, budget);
+  searching = 0;
+  return n;
+}
+
+static int search (PathNode from, PathNode to, PathNode *out, int max_out, int *budget) {
   if (from.x == to.x && from.y == to.y && from.z == to.z) return 0;
+  if (!mem) {
+    mem = platform->alloc_large(sizeof(SearchMemory));
+    block_cache = platform->alloc_large(BLOCK_CACHE * sizeof(CachedBlock));
+    if (!mem || !block_cache) { mem = NULL; return -1; }
+    memset(block_cache, 0, BLOCK_CACHE * sizeof(CachedBlock));
+  }
   memset(hash_slot, 0xFF, sizeof(hash_slot));
+  if (++ cache_gen == 0) {   // wrapped: clear once so no stale entry matches
+    memset(block_cache, 0, BLOCK_CACHE * sizeof(CachedBlock));
+    cache_gen = 1;
+  }
   pool_used = 0;
   heap_size = 0;
   pool[0] = (Node){ from.x, from.y, from.z, 0, estimate(from.x, from.y, from.z, to), -1, 0 };

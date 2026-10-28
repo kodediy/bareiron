@@ -113,11 +113,25 @@ static void test_path_never_through_lava (void) {
   }
 }
 
+// The pathfinder keeps the blocks it looked at, but only within one search
+static void test_path_sees_new_blocks (void) {
+  setup();
+  PathNode out[64];
+  int budget = PATH_TICK_BUDGET;
+  int n = path_find(node(5, FLOOR + 1, 5), node(15, FLOOR + 1, 5), out, 64, &budget);
+  CHECK(n == 10);
+  for (short z = 0; z < 30; z ++) for (uint8_t y = FLOOR + 1; y <= FLOOR + 3; y ++) makeBlockChange(10, y, z, B_stone);
+  budget = PATH_TICK_BUDGET;
+  CHECK(path_find(node(5, FLOOR + 1, 5), node(15, FLOOR + 1, 5), out, 64, &budget) == -1);   // walled off now
+  CHECK(path_standable(10, FLOOR + 4, 5));        // outside a search: the live world
+}
+
 int main (void) {
   RUN(test_path_straight);
   RUN(test_path_around_wall);
   RUN(test_path_up_steps);
   RUN(test_path_respects_budget);
   RUN(test_path_never_through_lava);
+  RUN(test_path_sees_new_blocks);
   return CHECK_DONE();
 }
