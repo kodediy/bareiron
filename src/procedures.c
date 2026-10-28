@@ -578,9 +578,16 @@ uint8_t makeBlockChange (short x, uint8_t y, short z, uint8_t block) {
   int existing = bc_find(x, y, z);
   if (existing != -1) {
     #ifdef ALLOW_CHESTS
-    // When replacing chests, clear following 14 entries too (item data)
+    // When replacing chests, clear following 14 entries too (item data),
+    // spilling what it held first, as vanilla does however it breaks
     if (block_changes[existing].block == B_chest) {
-      releaseChestStorage((uint8_t *)&block_changes[existing + 1]);
+      uint8_t *storage = (uint8_t *)&block_changes[existing + 1];
+      for (int i = 0; i < 27; i ++) {
+        uint16_t item;
+        memcpy(&item, storage + i * 3, 2);
+        if (item && storage[i * 3 + 2]) drop_pop(item, storage[i * 3 + 2], x + 0.5, y + 0.5, z + 0.5);
+      }
+      releaseChestStorage(storage);
       for (int j = 1; j < 15; j ++) {
         block_changes[existing + j].block = 0xFF;
         bc_on_clear(existing + j);

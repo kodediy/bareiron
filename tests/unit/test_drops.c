@@ -163,6 +163,27 @@ static void test_item_waits_while_nobody_is_near (void) {
   CHECK(itemsOnGround() == 0);
 }
 
+// A chest broken any way (mined, a creeper, TNT) spills what it held
+static void test_broken_chest_drops_its_contents (void) {
+  setup();
+  makeBlockChange(5, FLOOR + 1, 5, B_chest);
+  int chest = bc_find(5, FLOOR + 1, 5);
+  CHECK(chest != -1);
+  uint8_t *storage = (uint8_t *)&block_changes[chest + 1];
+  uint16_t diamond = I_diamond, bread = I_bread;
+  memcpy(storage + 0 * 3, &diamond, 2); storage[0 * 3 + 2] = 7;
+  memcpy(storage + 26 * 3, &bread, 2); storage[26 * 3 + 2] = 3;
+  makeBlockChange(5, FLOOR + 1, 5, B_air);
+  int diamonds = 0, breads = 0;
+  for (uint32_t i = 0; i < ent_capacity(); i ++) {
+    Entity *e = ent_at(i);
+    if (e->type != E_item) continue;
+    if (e->u.item.item == I_diamond) diamonds += e->u.item.count;
+    if (e->u.item.item == I_bread) breads += e->u.item.count;
+  }
+  CHECK(diamonds == 7 && breads == 3);
+}
+
 int main (void) {
   RUN(test_items_merge);
   RUN(test_despawn_after_6000);
@@ -173,5 +194,6 @@ int main (void) {
   RUN(test_full_table_lets_oldest_item_go);
   RUN(test_full_table_loses_nothing);
   RUN(test_item_waits_while_nobody_is_near);
+  RUN(test_broken_chest_drops_its_contents);
   return CHECK_DONE();
 }
