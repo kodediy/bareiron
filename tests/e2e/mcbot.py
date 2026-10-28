@@ -24,6 +24,9 @@ PLAY_CHUNK = 0x27
 PLAY_KEEP_ALIVE = 0x26
 PLAY_SYNC_POSITION = 0x41
 PLAY_DISCONNECT = 0x1C
+PLAY_SET_TIME = 0x6A         # Update Time
+PLAY_TELEPORT_ENTITY = 0x76
+PLAY_ENTITY_POSITION_SYNC = 0x1F   # what bareiron sends for another player's move
 
 # Serverbound
 SB_CONFIG_CLIENT_INFO = 0x00
@@ -91,6 +94,8 @@ class Bot:
     self.position = None         # last (x, y, z) sent by the server
     self.loaded = False
     self.state = "none"
+    self.packet_times = {}       # play packet id -> monotonic timestamps
+    self.time_of_day = []        # (monotonic, time of day) from Update Time
 
   # -- transport --------------------------------------------------------
 
@@ -203,6 +208,10 @@ class Bot:
         self.send(SB_CONFIG_FINISH_ACK)
         self.state = "play"
     elif self.state == "play":
+      self.packet_times.setdefault(packet_id, []).append(time.monotonic())
+      if packet_id == PLAY_SET_TIME:
+        _, day_time = struct.unpack(">qq", payload[:16])
+        self.time_of_day.append((time.monotonic(), day_time))
       if packet_id == PLAY_KEEP_ALIVE:
         self.keep_alives.append(time.monotonic())
         self.send(SB_PLAY_KEEP_ALIVE, payload)

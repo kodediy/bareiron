@@ -40,8 +40,12 @@ extern const BareironPlatform *platform;
 // Max render distance, determines how many chunks to send
 #define VIEW_DISTANCE 2
 
-// Time between server ticks in microseconds (default = 1s)
-#define TIME_BETWEEN_TICKS 1000000
+// Time between server ticks in microseconds: 50 ms, 20 ticks a second as in vanilla
+#define TIME_BETWEEN_TICKS 50000
+
+// A player's movement reaches the others once every this many ticks (vanilla's
+// player tracker: 2 ticks, 10 times a second), however many are connected
+#define PLAYER_MOVE_EVERY_TICKS 2
 
 // Calculated from TIME_BETWEEN_TICKS
 #define TICKS_PER_SECOND ((float)1000000 / TIME_BETWEEN_TICKS)
@@ -98,18 +102,14 @@ extern const BareironPlatform *platform;
 #define SEND_BRAND
 
 // If defined, rebroadcasts ALL incoming movement updates, disconnecting
-// movement from the server's tickrate. This makes movement much smoother
-// on very low tickrates, at the cost of potential network instability when
-// hosting more than just a couple of players. When disabling this on low
-// tickrates, consider disabling SCALE_MOVEMENT_UPDATES_TO_PLAYER_COUNT too.
-#define BROADCAST_ALL_MOVEMENT
+// movement from the server's tickrate. Off: at 20 ticks a second movement
+// goes out every PLAYER_MOVE_EVERY_TICKS, like vanilla.
+// #define BROADCAST_ALL_MOVEMENT
 
 // If defined, scales the frequency at which player movement updates are
-// broadcast based on the amount of players, reducing overhead for higher
-// player counts. For very many players, makes movement look jittery.
-// It is not recommended to use this if BROADCAST_ALL_MOVEMENT is disabled
-// on low tickrates, as that might drastically decrease the update rate.
-#define SCALE_MOVEMENT_UPDATES_TO_PLAYER_COUNT
+// broadcast based on the amount of players. Off: with six players each one
+// was seen about three times a second.
+// #define SCALE_MOVEMENT_UPDATES_TO_PLAYER_COUNT
 
 // If defined, calculates fluid flow when blocks are updated near fluids
 // Somewhat computationally expensive and potentially unstable
@@ -188,9 +188,9 @@ typedef struct {
   short z;
   short visited_x[VISITED_HISTORY];
   short visited_z[VISITED_HISTORY];
-  #ifdef SCALE_MOVEMENT_UPDATES_TO_PLAYER_COUNT
-    uint16_t packets_since_update;
-  #endif
+  // Used by SCALE_MOVEMENT_UPDATES_TO_PLAYER_COUNT; always here so the
+  // saved world keeps its layout until the format changes
+  uint16_t packets_since_update;
   int8_t yaw;
   int8_t pitch;
   uint8_t grounded_y;

@@ -1649,8 +1649,11 @@ void hurtEntity (int entity_id, int attacker_id, uint8_t damage_type, uint8_t da
 // Takes the time since the last tick in microseconds as the only arguemnt
 void handleServerTick (int64_t time_since_last_tick) {
 
-  // Update world time
-  world_time = (world_time + time_since_last_tick / 50000) % 24000;
+  // Update world time: a game tick is 50 ms, the remainder carries over
+  static int64_t world_time_us = 0;
+  world_time_us += time_since_last_tick;
+  world_time = (world_time + world_time_us / 50000) % 24000;
+  world_time_us %= 50000;
   // Increment server tick counter
   server_ticks ++;
 
@@ -1683,9 +1686,9 @@ void handleServerTick (int64_t time_since_last_tick) {
       } else player->flagval_16 ++;
     }
     // Reset movement update cooldown if not broadcasting every update
-    // Effectively ties player movement updates to the tickrate
+    // Ties player movement updates to PLAYER_MOVE_EVERY_TICKS
     #ifndef BROADCAST_ALL_MOVEMENT
-      player->flags &= ~0x40;
+      if (server_ticks % PLAYER_MOVE_EVERY_TICKS == 0) player->flags &= ~0x40;
     #endif
     // Below this, process events that happen once per second
     if (server_ticks % (uint32_t)TICKS_PER_SECOND != 0) continue;

@@ -154,6 +154,9 @@ static int openServerSocket (uint16_t port) {
 // How many packets to handle from one client before moving on to the next
 #define PACKETS_PER_ITERATION 8
 
+// Late ticks run at most this many at a time; beyond it the clock skips
+#define MAX_CATCHUP_TICKS 4
+
 // Accepts one pending connection, if there is one and a slot is free
 static void acceptClient (int server_fd, int *clients) {
   int slot = -1;
@@ -301,12 +304,17 @@ int bareiron_run (const BareironConfig *config) {
     // A few queued chunks per iteration, never a whole join at once
     cq_pump(CHUNKS_PER_ITERATION);
 
-    // Handle periodic events (server ticks), with or without players
-    int64_t time_since_last_tick = get_program_time() - last_tick_time;
-    if (time_since_last_tick > TIME_BETWEEN_TICKS) {
-      handleServerTick(time_since_last_tick);
-      last_tick_time = get_program_time();
+    // Handle periodic events (server ticks), with or without players. Ticks
+    // keep a fixed pace: one that runs late is caught up, a few at most per
+    // iteration, and a longer stall is skipped rather than replayed.
+    int64_t now = get_program_time();
+    int caught_up = 0;
+    while (now - last_tick_time >= TIME_BETWEEN_TICKS && caught_up < MAX_CATCHUP_TICKS) {
+      handleServerTick(TIME_BETWEEN_TICKS);
+      last_tick_time += TIME_BETWEEN_TICKS;
+      caught_up ++;
     }
+    if (now - last_tick_time >= TIME_BETWEEN_TICKS) last_tick_time = now;
 
     for (int i = 0; i < MAX_CONNECTIONS; i ++) {
       if (clients[i] == -1) continue;

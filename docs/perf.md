@@ -57,3 +57,14 @@ Las tablas de registros ya caben de sobra en RAM interna, así que no hace falta
 | Bytes recibidos al entrar | 55 534 | 50 648 |
 
 Las pruebas e2e admiten `BAREIRON_TEST_PORT` para no chocar con otro servidor en 25565.
+
+## El juego a 20 ticks por segundo (Plan 5, Task 2)
+
+- **Reloj:** `TIME_BETWEEN_TICKS` pasa de 1 s a 50 ms, como el juego. Los ticks van a ritmo fijo: uno que llega tarde se recupera, hasta 4 por vuelta, y un parón más largo se salta en vez de repetirse. La hora del mundo guarda el resto de cada división, así que no se retrasa.
+- **Movimiento de jugadores:** sale a los demás cada 2 ticks (10 veces por segundo), como el rastreador de jugadores del juego, tengan los jugadores que tengan. Antes se reenviaba una de cada N actualizaciones con N jugadores, así que con 6 jugadores cada uno se veía unas 3 veces por segundo.
+- **Pruebas e2e:** se lanzan con `python3 -m unittest discover -s tests/e2e`.
+
+| Mac | Ahora |
+|---|---:|
+| Tick con 6 jugadores y sin mobs (`tests/bench/mob_bench.c`) | 0,4 µs de media, 324 µs el peor |
+| Movimiento de otro jugador, con 4 conectados (e2e) | 10 por segundo (antes, 4,9) |
