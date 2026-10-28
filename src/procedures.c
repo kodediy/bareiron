@@ -548,6 +548,10 @@ static void releaseChestStorage (uint8_t *storage_ptr) {
 
 uint8_t makeBlockChange (short x, uint8_t y, short z, uint8_t block) {
 
+  // Every way below changes what getBlockAt must answer, including the
+  // in-place rewrite of an existing entry
+  blockCacheForget();
+
   // Transmit block update to all in-game clients
   for (int i = 0; i < MAX_PLAYERS; i ++) {
     if (player_data[i].client_fd == -1) continue;

@@ -47,6 +47,18 @@ static void test_change_is_seen_at_once (void) {
   CHECK(getBlockAt(5, y, 5) == B_air);
 }
 
+// Mining makes a new entry; placing another block in the hole rewrites it in place
+static void test_change_in_place_is_seen (void) {
+  setup(0x1234567u);
+  int y = getHeightAt(5, 5) - 2;
+  uint8_t ground = getBlockAt(5, y, 5);
+  CHECK(ground != B_air && ground != B_cobblestone);
+  makeBlockChange(5, (uint8_t)y, 5, B_air);
+  CHECK(getBlockAt(5, y, 5) == B_air);
+  makeBlockChange(5, (uint8_t)y, 5, B_cobblestone);
+  CHECK(getBlockAt(5, y, 5) == B_cobblestone);
+}
+
 static void test_new_world_forgets (void) {
   setup(0x1111u);
   int differ = 0;
@@ -64,6 +76,7 @@ static void test_new_world_forgets (void) {
 int main (void) {
   RUN(test_cached_matches_uncached);
   RUN(test_change_is_seen_at_once);
+  RUN(test_change_in_place_is_seen);
   RUN(test_new_world_forgets);
   return CHECK_DONE();
 }
