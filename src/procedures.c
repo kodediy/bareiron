@@ -24,6 +24,7 @@
 #include "entitymeta.h"
 #include "mobs.h"
 #include "combat.h"
+#include "drops.h"
 #include "spawning.h"
 
 int client_states[MAX_CONNECTIONS * 2];
@@ -472,6 +473,7 @@ void broadcastPlayerMetadata (PlayerData *player) {
 // If client_fd is -1, broadcasts to all player
 // What a player is sent right after an entity's Spawn Entity
 void ent_send_extra (const Entity *e, int client_fd) {
+  if (e->kind == ENT_KIND_ITEM) { drops_send_meta(e, client_fd); return; }
   if (e->type == E_sheep && (e->flags & ENT_SHEARED)) {
     EntityData wool = { META_SHEEP_WOOL, META_T_BYTE, { (uint8_t)0x10 } };
     sc_setEntityMetadata(client_fd, e->id, &wool, 1);
@@ -1169,14 +1171,9 @@ void playPickupAnimation (PlayerData *player, uint16_t item, double x, double y,
 
 void handlePlayerAction (PlayerData *player, int action, short x, short y, short z) {
 
-  // Re-sync slot when player drops an item
+  // Q drops one item from the hand, Ctrl+Q the whole stack
   if (action == 3 || action == 4) {
-    sc_setContainerSlot(
-      player->client_fd, 0,
-      serverSlotToClientSlot(0, player->hotbar),
-      player->inventory_count[player->hotbar],
-      player->inventory_items[player->hotbar]
-    );
+    drops_throw(player, action == 3);
     return;
   }
 
@@ -1209,12 +1206,8 @@ void handlePlayerAction (PlayerData *player, int action, short x, short y, short
   uint16_t item = getMiningResult(held_item, block);
   bumpToolDurability(player);
 
-  if (item) {
-    #ifdef ENABLE_PICKUP_ANIMATION
-    playPickupAnimation(player, item, x, y, z);
-    #endif
-    givePlayerItem(player, item, 1);
-  }
+  // The block pops out as an item, picked up by walking over it
+  if (item) drop_pop(item, 1, x + 0.5, y + 0.25, z + 0.5);
 
   // Update nearby fluids
   uint8_t block_above = getBlockAt(x, y + 1, z);
@@ -1234,7 +1227,7 @@ void handlePlayerAction (PlayerData *player, int action, short x, short y, short
     makeBlockChange(x, y + y_offset, z, 0);
     // Check for item drops *without a tool*
     uint16_t item = getMiningResult(0, block_above);
-    if (item) givePlayerItem(player, item, 1);
+    if (item) drop_pop(item, 1, x + 0.5, y + y_offset + 0.25, z + 0.5);
     // Select the next block in the column
     y_offset ++;
     block_above = getBlockAt(x, y + y_offset, z);
@@ -1424,13 +1417,9 @@ void interactEntity (int entity_id, int interactor_id) {
 
       bumpToolDurability(player);
 
-      #ifdef ENABLE_PICKUP_ANIMATION
-      playPickupAnimation(player, I_white_wool,
-        (double)mob->x / ENT_UNIT, (double)mob->y / ENT_UNIT, (double)mob->z / ENT_UNIT);
-      #endif
-
-      uint8_t item_count = 1 + (fast_rand() & 1); // 1-2
-      givePlayerItem(player, I_white_wool, item_count);
+      // 1 to 3 wool pops out, as in vanilla
+      drop_pop(I_white_wool, 1 + fast_rand() % 3,
+        (double)mob->x / ENT_UNIT, (double)mob->y / ENT_UNIT + 1, (double)mob->z / ENT_UNIT);
 
       for (int i = 0; i < MAX_PLAYERS; i ++) {
         PlayerData* player = &player_data[i];
@@ -1545,6 +1534,7 @@ void handleServerTick (int64_t time_since_last_tick) {
   // Monsters appear in the dark around players; mobs move every tick
   spawn_tick();
   mobs_tick();
+  drops_tick();
 
   // Entities' movement and who sees them, every few ticks
   ent_network_tick();
@@ -1576,9 +1566,21 @@ ssize_t writeEntityData (int client_fd, EntityData *data) {
 
   switch (data->type) {
     case 0: // Byte
+    case 8: // Boolean
       return writeByte(client_fd, data->value.byte);
+    case 1: // VarInt
     case 21: // Pose
       writeVarInt(client_fd, data->value.pose);
+      return 0;
+    case 3: // Float
+      return writeFloat(client_fd, data->value.f);
+    case 7: // Slot: count, then item and no component changes
+      writeVarInt(client_fd, data->value.slot.count);
+      if (data->value.slot.count) {
+        writeVarInt(client_fd, data->value.slot.item);
+        writeVarInt(client_fd, 0);
+        writeVarInt(client_fd, 0);
+      }
       return 0;
 
     default: return -1;
@@ -1591,10 +1593,19 @@ int sizeEntityData (EntityData *data) {
 
   switch (data->type) {
     case 0: // Byte
+    case 8: // Boolean
       value_size = 1;
       break;
+    case 1: // VarInt
     case 21: // Pose
       value_size = sizeVarInt(data->value.pose);
+      break;
+    case 3: // Float
+      value_size = 4;
+      break;
+    case 7: // Slot
+      value_size = sizeVarInt(data->value.slot.count) +
+        (data->value.slot.count ? sizeVarInt(data->value.slot.item) + 2 : 0);
       break;
 
     default: return -1;

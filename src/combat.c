@@ -10,6 +10,7 @@
 #include "entity.h"
 #include "mobs.h"
 #include "combat.h"
+#include "drops.h"
 
 // What a player's combat needs from tick to tick and nobody saves
 typedef struct {
@@ -197,25 +198,12 @@ static void hurtPlayer (int32_t target_id, int32_t attacker_id, uint8_t damage_t
     player->health = 0;
     died = 1;
     deathMessage(player, attacker_id, damage_type, amount);
+    drops_spill_inventory(player);
   } else {
     player->health -= whole;
   }
   sc_setHealth(target_id, player->health, player->hunger, player->saturation);
   broadcastHurt(target_id, damage_type, died, NULL);
-}
-
-static void dropLoot (Entity *mob, int32_t attacker_id) {
-  if (attacker_id <= 0) return;
-  PlayerData *player;
-  if (getPlayerData(attacker_id, &player)) return;
-  switch (mob->type) {
-    case E_chicken: givePlayerItem(player, I_chicken, 1); break;
-    case E_cow: givePlayerItem(player, I_beef, 1 + (fast_rand() % 3)); break;
-    case E_pig: givePlayerItem(player, I_porkchop, 1 + (fast_rand() % 3)); break;
-    case E_sheep: givePlayerItem(player, I_mutton, 1 + (fast_rand() & 1)); break;
-    case E_zombie: givePlayerItem(player, I_rotten_flesh, (fast_rand() % 3)); break;
-    default: break;
-  }
 }
 
 static void hurtMob (int32_t target_id, int32_t attacker_id, uint8_t damage_type, float amount) {
@@ -234,7 +222,7 @@ static void hurtMob (int32_t target_id, int32_t attacker_id, uint8_t damage_type
     mob->flags |= ENT_DEAD;
     mob->timer = 0;   // counts the death animation's ticks
     died = 1;
-    dropLoot(mob, attacker_id);
+    drop_loot(mob, attacker_id);
   } else {
     mob->health -= dealt;
   }

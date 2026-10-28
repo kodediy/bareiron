@@ -78,7 +78,7 @@ void phys_step (Entity *e, const PhysBody *b) {
   // Walking into a ledge one block high: jump it, as a mob's move control
   // does. A wall two blocks high stops it.
   uint8_t jumped = 0;
-  if ((stopped_x || stopped_z) && (on_ground || was_on_ground) &&
+  if (b->step_up > 0 && (stopped_x || stopped_z) && (on_ground || was_on_ground) &&
       !boxHits(pos[0] + (stopped_x ? e->vx : 0), pos[1] + 1.0 + FACE_EPS,
                pos[2] + (stopped_z ? e->vz : 0), b)) {
     e->vy = PHYS_JUMP;

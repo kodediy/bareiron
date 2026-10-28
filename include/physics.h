@@ -12,7 +12,7 @@
 
 typedef struct {
   float width, height;   // the box, in blocks
-  float step_up;         // a ledge this high is walked onto; higher ones are jumped when blocked
+  float step_up;         // a ledge this high is walked onto, one block jumped when blocked; 0: never jumps (items)
   float gravity;         // per tick: 0.08 for mobs
   float drag;            // vertical drag per tick: 0.98
 } PhysBody;

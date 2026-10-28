@@ -220,14 +220,15 @@ typedef struct {
 #pragma pack(pop)
 
 union EntityDataValue {
-  uint8_t byte;
-  int pose;
+  uint8_t byte;      // Byte, Boolean
+  int pose;          // Pose, VarInt
+  float f;           // Float
+  struct { uint16_t item; uint8_t count; } slot;   // Slot
 };
 
 typedef struct {
   uint8_t index;
-  // 0 - Byte
-  // 21 - Pose
+  // 0 - Byte, 1 - VarInt, 3 - Float, 7 - Slot, 8 - Boolean, 21 - Pose
   int type;
   union EntityDataValue value;
 } EntityData;

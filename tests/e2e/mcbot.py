@@ -30,6 +30,7 @@ PLAY_ENTITY_POSITION_SYNC = 0x1F   # what bareiron sends for another player's mo
 PLAY_ADD_ENTITY = 0x01
 PLAY_LOGIN = 0x2B
 PLAY_SET_ENTITY_MOTION = 0x5E
+PLAY_TAKE_ITEM_ENTITY = 0x75
 PLAY_REMOVE_ENTITIES = 0x46
 PLAY_MOVE_ENTITY_POS = 0x2E
 PLAY_MOVE_ENTITY_POS_ROT = 0x2F
@@ -108,6 +109,7 @@ class Bot:
     self.entity_id = None        # this bot's own entity id (Login)
     self.motions = []            # (vx, vy, vz) blocks/tick the server set on this bot
     self.health = None           # last Set Health
+    self.pickups = []            # (item entity id, collector id, count) from Take Item Entity
 
   # -- transport --------------------------------------------------------
 
@@ -221,6 +223,11 @@ class Bot:
         self.state = "play"
     elif self.state == "play":
       self.packet_times.setdefault(packet_id, []).append(time.monotonic())
+      if packet_id == PLAY_TAKE_ITEM_ENTITY:
+        collected, pos = read_varint(payload, 0)
+        collector, pos = read_varint(payload, pos)
+        count, pos = read_varint(payload, pos)
+        self.pickups.append((collected, collector, count))
       if packet_id == PLAY_LOGIN:
         self.entity_id = struct.unpack(">i", payload[:4])[0]
       elif packet_id == PLAY_SET_ENTITY_MOTION:
