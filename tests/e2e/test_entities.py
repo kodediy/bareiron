@@ -9,6 +9,7 @@ from server import ServerProcess  # noqa: E402
 
 PORT = int(os.environ.get("BAREIRON_TEST_PORT", "25565"))  # another port if 25565 is taken
 VIEW_DISTANCE = 2
+COWS = {"BAREIRON_TEST_MOBS": "6"}   # six cows around the spawn when the server starts
 
 
 def chunk(v):
@@ -33,13 +34,11 @@ class EntityTrackingTest(unittest.TestCase):
 
   def test_join_sees_existing_mobs(self):
     """A player who joins is sent the mobs already around it."""
-    with ServerProcess(PORT):
+    with ServerProcess(PORT, env=COWS):
       first = Bot(port=PORT, name="first")
       first.login()
-      first.pump(1.0)
-      first.walk_circle(20.0, radius=24.0, speed=8.0)   # crossing chunks spawns mobs
-      first.pump(1.0)
-      self.assertGreaterEqual(len(mobs(first)), 2, "the first bot should have met some mobs")
+      first.pump(3.0)
+      self.assertGreaterEqual(len(mobs(first)), 6, "the six cows around the spawn")
 
       second = Bot(port=PORT, name="second")
       second.login()
@@ -56,14 +55,12 @@ class EntityTrackingTest(unittest.TestCase):
 
   def test_leaving_range_removes_entities(self):
     """Walking away removes what is out of view; coming back spawns it once."""
-    with ServerProcess(PORT):
+    with ServerProcess(PORT, env=COWS):
       bot = Bot(port=PORT, name="walker")
       bot.login()
-      bot.pump(1.0)
-      bot.walk_circle(20.0, radius=24.0, speed=8.0)
-      bot.pump(1.0)
+      bot.pump(3.0)
       near = dict(mobs(bot))
-      self.assertGreaterEqual(len(near), 1)
+      self.assertGreaterEqual(len(near), 6)
       x0, _, z0 = bot.position
       far = max(abs(e["x"] - x0) for e in near.values()) + (VIEW_DISTANCE + 2) * 16
       walk_to(bot, x0 + far, z0)

@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #include "globals.h"
+#include "pathfind.h"
 
 // One table for everything in the world that is not a player: mobs, items
 // on the ground, arrows, primed TNT. It lives in big memory (PSRAM on the
@@ -46,7 +47,17 @@ typedef struct Entity {
   int32_t  sent_x, sent_y, sent_z;   // what its trackers last got
   uint8_t  sent_yaw, sent_pitch, sent_head;
   union {
-    struct { int32_t target; uint8_t panic; uint8_t wool; } mob;
+    struct {
+      int32_t  target;        // the player it is after, -1 none
+      uint8_t  panic;         // ticks of panic left
+      uint8_t  wool;          // a sheep's colour
+      uint8_t  goal;          // GOAL_* running now
+      uint8_t  path_len, path_i;
+      uint8_t  path_wait;     // ticks before it may ask for another path
+      uint8_t  attack_cd;     // ticks before it may hit again
+      uint8_t  look_ticks;    // ticks left looking at a player
+      PathNode path[8];       // the next steps of its path
+    } mob;
     struct { uint16_t item; uint8_t count; } item;
     struct { int32_t owner; float damage; } arrow;
   } u;

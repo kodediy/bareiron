@@ -68,3 +68,14 @@ Las pruebas e2e admiten `BAREIRON_TEST_PORT` para no chocar con otro servidor en
 |---|---:|
 | Tick con 6 jugadores y sin mobs (`tests/bench/mob_bench.c`) | 0,4 µs de media, 324 µs el peor |
 | Movimiento de otro jugador, con 4 conectados (e2e) | 10 por segundo (antes, 4,9) |
+
+## Mobs con física y caminos (Plan 5, Task 6)
+
+Cada mob hace física en cada tick, decide cada 4 ticks (escalonados) y pide un camino como mucho una vez por segundo, con 600 nodos de A* por tick para todos. El empujón por tick es el del juego (velocidad², 0,23² en un zombi), así que un zombi anda a unos 2,3 bloques por segundo.
+
+| Mac (`tests/bench/mob_bench.c`) | Media por tick | Peor tick |
+|---|---:|---:|
+| 6 jugadores, sin mobs | 0,9 µs | 340 µs |
+| 6 jugadores, 48 mobs (mitad zombis, mitad vacas) | 112 µs | 809 µs |
+
+En el P4 hay que medirlo (Task 16): con un factor de 20 a 40, el peor tick podría rondar los 16-32 ms. Si pasa de 30 ms, se baja `PATH_TICK_BUDGET`.

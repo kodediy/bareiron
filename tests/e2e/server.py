@@ -14,15 +14,16 @@ BINARY = os.path.join(ROOT, "bareiron")
 
 
 class ServerProcess:
-  def __init__(self, port=25565, world_dir=None):
+  def __init__(self, port=25565, world_dir=None, env=None):
     self.port = port
+    self.extra_env = env or {}
     self.world_dir = world_dir or tempfile.mkdtemp(prefix="bareiron-world-")
     self.proc = None
     self.lines = []
     self._lock = threading.Lock()
 
   def start(self, timeout=10.0):
-    env = dict(os.environ, BAREIRON_PORT=str(self.port))
+    env = dict(os.environ, BAREIRON_PORT=str(self.port), **self.extra_env)
     self.proc = subprocess.Popen(
       [BINARY], cwd=self.world_dir, env=env,
       stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1,

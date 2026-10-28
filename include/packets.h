@@ -53,6 +53,7 @@ int sc_setEntityMetadata (int client_fd, int id, EntityData *metadata, size_t le
 int sc_entityAnimation (int client_fd, int id, uint8_t animation);
 int sc_teleportEntity (int client_fd, int id, double x, double y, double z, float yaw, float pitch);
 int sc_setHeadRotation (int client_fd, int id, uint8_t yaw);
+int sc_soundEntity (int client_fd, uint16_t sound, uint8_t category, int entity_id, float volume, float pitch);
 int sc_moveEntity (int client_fd, int id, int16_t dx, int16_t dy, int16_t dz,
                    uint8_t with_rotation, uint8_t yaw, uint8_t pitch, uint8_t on_ground);
 int sc_updateEntityRotation (int client_fd, int id, uint8_t yaw, uint8_t pitch);

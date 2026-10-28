@@ -58,6 +58,9 @@ static void test_walks_up_one_block_not_two (void) {
   Entity *e = mob_at(10.5, FLOOR + 1, 10.5);
   push(e, 80, 0.15f);
   CHECK(e->x > 16 * ENT_UNIT);                                // went over it
+  for (int t = 0; t < 40; t ++) phys_step(e, &zombie);
+  CHECK(e->y == (FLOOR + 1) * ENT_UNIT);                      // and came back down after it
+  CHECK(e->flags & ENT_ON_GROUND);
   setup();
   makeBlockChange(15, FLOOR + 1, 10, B_stone);              // a two-block wall
   makeBlockChange(15, FLOOR + 2, 10, B_stone);

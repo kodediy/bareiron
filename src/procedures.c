@@ -22,6 +22,7 @@
 #include "net.h"
 #include "entity.h"
 #include "entitymeta.h"
+#include "mobs.h"
 
 int client_states[MAX_CONNECTIONS * 2];
 
@@ -1394,10 +1395,8 @@ void handlePlayerUseItem (PlayerData *player, short x, short y, short z, uint8_t
 }
 
 void spawnMob (uint16_t type, short x, uint8_t y, short z, uint8_t health) {
-  Entity *e = ent_spawn(type,
-    x * ENT_UNIT + ENT_UNIT / 2, y * ENT_UNIT, z * ENT_UNIT + ENT_UNIT / 2);
-  if (!e) return;
-  e->health = health;
+  (void)health;   // the type's own (mobs.c)
+  mob_spawn(type, x * ENT_UNIT + ENT_UNIT / 2, y * ENT_UNIT, z * ENT_UNIT + ENT_UNIT / 2);
   // Spawned to each player by the next network turn (entity.c)
 }
 
@@ -1545,8 +1544,8 @@ void hurtEntity (int entity_id, int attacker_id, uint8_t damage_type, uint8_t da
     // Don't continue if the mob is already dead
     if (mob->flags & ENT_DEAD) return;
 
-    // Set the mob's panic timer
-    mob->u.mob.panic = 3;
+    // Panic, or turn on whoever hit it
+    mob_hurt_reaction(mob, attacker_id);
 
     // Process health change on the server
     if (mob->health <= damage) {
@@ -1679,222 +1678,8 @@ void handleServerTick (int64_t time_since_last_tick) {
    */
   if (rng_seed == 0) rng_seed = world_seed;
 
-  // Tick mob behavior
-  for (uint32_t i = 0; i < ent_capacity(); i ++) {
-    Entity *mob = ent_at(i);
-    if (mob->type == 0 || mob->kind != ENT_KIND_MOB) continue;
-    int entity_id = mob->id;
-    mob->age ++;
-
-    // Handle deallocation on mob death, a second after it
-    if (mob->flags & ENT_DEAD) {
-      if (mob->timer < (unsigned int)TICKS_PER_SECOND) {
-        mob->timer ++;
-        continue;
-      }
-      for (int j = 0; j < MAX_PLAYERS; j ++) {
-        if (!(mob->seen_by & ((uint64_t)1 << j))) continue;
-        if (player_data[j].client_fd == -1) continue;
-        // Spawn death smoke particles
-        sc_entityEvent(player_data[j].client_fd, entity_id, 60);
-      }
-      ent_remove(mob);
-      continue;
-    }
-
-    uint8_t passive = (
-      mob->type == E_chicken ||
-      mob->type == E_cow ||
-      mob->type == E_pig ||
-      mob->type == E_sheep
-    );
-    // Mob "panic" timer, set to 3 after being hit
-    // Currently has no effect on hostile mobs
-    uint8_t panic = mob->u.mob.panic;
-
-    short mob_x = (short)(mob->x >> 12), mob_z = (short)(mob->z >> 12);
-    uint8_t mob_y = (uint8_t)(mob->y >> 12);
-
-    // Burn hostile mobs if above ground during sunlight, once a second
-    if (!passive && (world_time < 13000 || world_time > 23460) && mob_y > 48 &&
-        server_ticks % (uint32_t)TICKS_PER_SECOND == 0) {
-      hurtEntity(entity_id, -1, D_on_fire, 2);
-      if (mob->flags & ENT_DEAD) continue;
-    }
-
-    uint32_t r = fast_rand();
-
-    if (passive) {
-      if (panic) {
-        // If panicking, move randomly at up to 4 times per second
-        if (TICKS_PER_SECOND >= 4) {
-          uint32_t ticks_per_panic = (uint32_t)(TICKS_PER_SECOND / 4);
-          if (server_ticks % ticks_per_panic != 0) continue;
-        }
-        // Reset panic state after timer runs out
-        // Each panic timer tick takes one second
-        if (server_ticks % (uint32_t)TICKS_PER_SECOND == 0) {
-          mob->u.mob.panic --;
-        }
-      } else {
-        // When not panicking, move idly once per 4 seconds on average
-        if (r % (4 * (unsigned int)TICKS_PER_SECOND) != 0) continue;
-      }
-    } else {
-      // Update hostile mobs once per second
-      if (server_ticks % (uint32_t)TICKS_PER_SECOND != 0) continue;
-    }
-
-    // Find the player closest to this mob
-    PlayerData* closest_player = &player_data[0];
-    uint32_t closest_dist = 2147483647;
-    for (int j = 0; j < MAX_PLAYERS; j ++) {
-      if (player_data[j].client_fd == -1) continue;
-      uint16_t curr_dist = (
-        abs(mob_x - player_data[j].x) +
-        abs(mob_z - player_data[j].z)
-      );
-      if (curr_dist < closest_dist) {
-        closest_dist = curr_dist;
-        closest_player = &player_data[j];
-      }
-    }
-
-    // Despawn mobs past a certain distance from nearest player
-    if (closest_dist > MOB_DESPAWN_DISTANCE) {
-      ent_remove(mob);
-      continue;
-    }
-
-    short old_x = mob_x, old_z = mob_z;
-    uint8_t old_y = mob_y;
-
-    short new_x = old_x, new_z = old_z;
-    uint8_t new_y = old_y, yaw = 0;
-    if (passive) { // Passive mob movement handling
-
-      // Move by one block on the X or Z axis
-      // Yaw is set to face in the direction of motion
-      if ((r >> 2) & 1) {
-        if ((r >> 1) & 1) { new_x += 1; yaw = 192; }
-        else { new_x -= 1; yaw = 64; }
-      } else {
-        if ((r >> 1) & 1) { new_z += 1; yaw = 0; }
-        else { new_z -= 1; yaw = 128; }
-      }
-
-    } else { // Hostile mob movement handling
-
-      // If we're already next to the player, hurt them and skip movement
-      if (closest_dist < 3 && abs(old_y - closest_player->y) < 2) {
-        hurtEntity(closest_player->client_fd, entity_id, D_generic, 6);
-        continue;
-      }
-
-      // Move towards the closest player on 8 axis
-      // The condition nesting ensures a correct yaw at 45 degree turns
-      if (closest_player->x < old_x) {
-        new_x -= 1; yaw = 64;
-        if (closest_player->z < old_z) { new_z -= 1; yaw += 32; }
-        else if (closest_player->z > old_z) { new_z += 1; yaw -= 32; }
-      }
-      else if (closest_player->x > old_x) {
-        new_x += 1; yaw = 192;
-        if (closest_player->z < old_z) { new_z -= 1; yaw -= 32; }
-        else if (closest_player->z > old_z) { new_z += 1; yaw += 32; }
-      } else {
-        if (closest_player->z < old_z) { new_z -= 1; yaw = 128; }
-        else if (closest_player->z > old_z) { new_z += 1; yaw = 0; }
-      }
-
-    }
-
-    // Holds the block that the mob is moving into
-    uint8_t block = getBlockAt(new_x, new_y, new_z);
-    // Holds the block above the target block, i.e. the "head" block
-    uint8_t block_above = getBlockAt(new_x, new_y + 1, new_z);
-
-    // Validate movement on X axis
-    if (new_x != old_x && (
-      !isPassableBlock(getBlockAt(new_x, new_y + 1, old_z)) ||
-      (
-        !isPassableBlock(getBlockAt(new_x, new_y, old_z)) &&
-        !isPassableBlock(getBlockAt(new_x, new_y + 2, old_z))
-      )
-    )) {
-      new_x = old_x;
-      block = getBlockAt(old_x, new_y, new_z);
-      block_above = getBlockAt(old_x, new_y + 1, new_z);
-    }
-    // Validate movement on Z axis
-    if (new_z != old_z && (
-      !isPassableBlock(getBlockAt(old_x, new_y + 1, new_z)) ||
-      (
-        !isPassableBlock(getBlockAt(old_x, new_y, new_z)) &&
-        !isPassableBlock(getBlockAt(old_x, new_y + 2, new_z))
-      )
-    )) {
-      new_z = old_z;
-      block = getBlockAt(new_x, new_y, old_z);
-      block_above = getBlockAt(new_x, new_y + 1, old_z);
-    }
-    // Validate diagonal movement
-    if (new_x != old_x && new_z != old_z && (
-      !isPassableBlock(block_above) ||
-      (
-        !isPassableBlock(block) &&
-        !isPassableBlock(getBlockAt(new_x, new_y + 2, new_z))
-      )
-    )) {
-      // We know that movement along just one axis is fine thanks to the
-      // checks above, pick one based on proximity.
-      int dist_x = abs(old_x - closest_player->x);
-      int dist_z = abs(old_z - closest_player->z);
-      if (dist_x < dist_z) new_z = old_z;
-      else new_x = old_x;
-      block = getBlockAt(new_x, new_y, new_z);
-    }
-
-    // Check if we're supposed to climb/drop one block
-    // The checks above already ensure that there's enough space to climb
-    if (!isPassableBlock(block)) new_y += 1;
-    else if (isPassableBlock(getBlockAt(new_x, new_y - 1, new_z))) new_y -= 1;
-
-    // Exit early if all movement was cancelled
-    if (new_x == old_x && new_z == old_z && new_y == old_y) continue;
-
-    // Prevent collisions with other mobs
-    uint8_t colliding = false;
-    for (uint32_t j = 0; j < ent_capacity(); j ++) {
-      Entity *other = ent_at(j);
-      if (j == i || other->type == 0 || other->kind != ENT_KIND_MOB) continue;
-      if (
-        (other->x >> 12) == new_x &&
-        (other->z >> 12) == new_z &&
-        abs((int)(other->y >> 12) - (int)new_y) < 2
-      ) {
-        colliding = true;
-        break;
-      }
-    }
-    if (colliding) continue;
-
-    if ( // Hurt mobs that stumble into lava
-      (block >= B_lava && block < B_lava + 4) ||
-      (block_above >= B_lava && block_above < B_lava + 4)
-    ) hurtEntity(entity_id, -1, D_lava, 8);
-
-    // Store new mob position, in the middle of its block
-    mob->x = new_x * ENT_UNIT + ENT_UNIT / 2;
-    mob->y = new_y * ENT_UNIT;
-    mob->z = new_z * ENT_UNIT + ENT_UNIT / 2;
-
-    // Vary the yaw angle to look just a little less robotic
-    yaw += ((r >> 7) & 31) - 16;
-    mob->yaw = mob->head_yaw = yaw;
-    ent_moved(mob);
-
-  }
+  // Mobs: physics every tick, decisions every few
+  mobs_tick();
 
   // Entities' movement and who sees them, every few ticks
   ent_network_tick();

@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 #include <fcntl.h>
 #include <errno.h>
 
@@ -28,6 +29,9 @@
 #include "tools.h"
 #include "varnum.h"
 #include "entity.h"
+#include "mobs.h"
+#include "registries.h"
+#include "worldgen.h"
 #include "procedures.h"
 #include "serialize.h"
 #include "dispatch.h"
@@ -93,6 +97,23 @@ static void resetServerState (const BareironConfig *config) {
   }
   ent_clear();
 }
+
+#ifndef ESP_PLATFORM
+// End-to-end tests only (environment variables on the computer): mobs that
+// are there from the start, so a test does not depend on chance
+static void applyTestHooks (void) {
+  const char *mobs = getenv("BAREIRON_TEST_MOBS");
+  if (!mobs) return;
+  short sx, sz;
+  findSpawnColumn(&sx, &sz);
+  int n = atoi(mobs);
+  for (int i = 0; i < n; i ++) {
+    // a ring 6 blocks out from the spawn
+    int x = sx + (int)(6 * cos(i * 6.2831853 / n)), z = sz + (int)(6 * sin(i * 6.2831853 / n));
+    mob_spawn(E_cow, x * ENT_UNIT + ENT_UNIT / 2, (getHeightAt(x, z) + 1) * ENT_UNIT, z * ENT_UNIT + ENT_UNIT / 2);
+  }
+}
+#endif
 
 // Sends whatever each client has queued, and drops clients whose
 // connection broke or who stopped reading (backlog over NET_TX_CAP)
@@ -274,6 +295,9 @@ int bareiron_run (const BareironConfig *config) {
     return loaded;
   }
   bc_index_rebuild();
+#ifndef ESP_PLATFORM
+  applyTestHooks();
+#endif
 
   int server_fd = openServerSocket(config->port);
   if (server_fd < 0) {

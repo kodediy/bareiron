@@ -1040,6 +1040,19 @@ int sc_setHeadRotation (int client_fd, int id, uint8_t yaw) {
   return 0;
 }
 
+// S->C Sound Entity: a registered sound played from an entity
+int sc_soundEntity (int client_fd, uint16_t sound, uint8_t category, int entity_id, float volume, float pitch) {
+  writeVarInt(client_fd, 1 + sizeVarInt(sound + 1) + 1 + sizeVarInt(entity_id) + 4 + 4 + 8);
+  writeByte(client_fd, P_sound_entity);
+  writeVarInt(client_fd, sound + 1);   // a registry id, not an inline sound
+  writeByte(client_fd, category);
+  writeVarInt(client_fd, entity_id);
+  writeFloat(client_fd, volume);
+  writeFloat(client_fd, pitch);
+  writeUint64(client_fd, fast_rand());  // seed for the sound's variant
+  return 0;
+}
+
 // S->C Move Entity Position / Position and Rotation: a move of less than 8
 // blocks, in 1/4096 of a block
 int sc_moveEntity (int client_fd, int id, int16_t dx, int16_t dy, int16_t dz,

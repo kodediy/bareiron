@@ -77,10 +77,12 @@ void phys_step (Entity *e, const PhysBody *b) {
 
   // Walking into a ledge one block high: jump it, as a mob's move control
   // does. A wall two blocks high stops it.
+  uint8_t jumped = 0;
   if ((stopped_x || stopped_z) && (on_ground || was_on_ground) &&
       !boxHits(pos[0] + (stopped_x ? e->vx : 0), pos[1] + 1.0 + FACE_EPS,
                pos[2] + (stopped_z ? e->vz : 0), b)) {
     e->vy = PHYS_JUMP;
+    jumped = 1;
   }
   if (stopped_x) e->vx = 0;
   if (stopped_z) e->vz = 0;
@@ -100,7 +102,8 @@ void phys_step (Entity *e, const PhysBody *b) {
     float friction = on_ground ? PHYS_GROUND_FRICTION : PHYS_AIR_FRICTION;
     e->vx *= friction;
     e->vz *= friction;
-    if (e->vy != PHYS_JUMP) e->vy = (e->vy - b->gravity) * b->drag;
+    // The jump's own tick keeps its full speed; gravity takes over from the next
+    if (!jumped) e->vy = (e->vy - b->gravity) * b->drag;
   }
 
   e->flags = (e->flags & ~(ENT_ON_GROUND | ENT_IN_WATER)) |
