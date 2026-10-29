@@ -651,7 +651,9 @@ int cs_clickContainer (int client_fd) {
   uint16_t item;
   int tmp;
 
-  uint16_t *p_item;
+  // Byte pointers: PlayerData is packed, so its uint16_t items may sit at
+  // odd addresses, and they are written with memcpy
+  uint8_t *p_item;
   uint8_t *p_count;
 
   #ifdef ALLOW_CHESTS
@@ -663,27 +665,31 @@ int cs_clickContainer (int client_fd) {
   for (int i = 0; i < changes_count; i ++) {
 
     slot = clientSlotToServerSlot(window_id, readUint16(client_fd));
+    // A slot the server keeps nowhere (255: a result slot, or a window it
+    // does not know) or past the crafting grid would write outside the
+    // player: read its item and leave it
+    uint8_t valid = slot <= 49 || (window_id == 2 && slot <= 41 + 26);
     // slots outside of the inventory overflow into the crafting buffer
-    if (slot > 40 && apply_changes) craft = true;
+    if (valid && slot > 40 && apply_changes) craft = true;
 
     #ifdef ALLOW_CHESTS
     if (window_id == 2 && slot > 40) {
       // Get item pointers from the player's storage pointer
       // See the handlePlayerUseItem function for more info on this hack
-      p_item = (uint16_t *)(storage_ptr + (slot - 41) * 3);
+      p_item = storage_ptr + (slot - 41) * 3;
       p_count = storage_ptr + (slot - 41) * 3 + 2;
     } else
     #endif
     {
       // Prevent accessing crafting-related slots when craft_items is locked
-      if (slot > 40 && player->flags & 0x80) return 1;
-      p_item = &player->inventory_items[slot];
-      p_count = &player->inventory_count[slot];
+      if (valid && slot > 40 && player->flags & 0x80) return 1;
+      p_item = valid ? (uint8_t *)&player->inventory_items[slot] : NULL;
+      p_count = valid ? &player->inventory_count[slot] : NULL;
     }
 
     if (!readByte(client_fd)) { // no item?
-      if (slot != 255 && apply_changes) {
-        *p_item = 0;
+      if (valid && apply_changes) {
+        memset(p_item, 0, 2);
         *p_count = 0;
         #ifdef ALLOW_CHESTS
         if (window_id == 2 && slot > 40) {
@@ -701,8 +707,8 @@ int cs_clickContainer (int client_fd) {
     readLengthPrefixedData(client_fd);
     readLengthPrefixedData(client_fd);
 
-    if (count > 0 && apply_changes) {
-      *p_item = item;
+    if (valid && count > 0 && apply_changes) {
+      memcpy(p_item, &item, 2);
       *p_count = count;
       #ifdef ALLOW_CHESTS
       if (window_id == 2 && slot > 40) {
