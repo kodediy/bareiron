@@ -57,8 +57,25 @@ static void test_gravel_gives_flint (void) {
   CHECK(flint >= 60 && flint <= 140);                  // 1 in 10
 }
 
+// Every player slot crafts: PlayerData is packed and 221 bytes long, so in
+// every other slot craft_items sits at an odd address. The Kode Dot's
+// RISC-V core panics on a misaligned 16-bit load, and run.sh makes UBSan
+// stop on one as well.
+static void test_every_slot_crafts (void) {
+  const uint16_t tnt[9] = { G, A, G,  A, G, A,  G, A, G };
+  for (int i = 0; i < 4; i ++) {
+    PlayerData *q = &player_data[i];
+    memset(q, 0, sizeof(*q));
+    for (int k = 0; k < 9; k ++) { q->craft_items[k] = tnt[k]; q->craft_count[k] = 1; }
+    uint16_t out_item; uint8_t out_count;
+    getCraftingOutput(q, &out_count, &out_item);
+    CHECK(out_item == I_tnt && out_count == 1);
+  }
+}
+
 int main (void) {
   RUN(test_recipes_wave1);
   RUN(test_gravel_gives_flint);
+  RUN(test_every_slot_crafts);
   return CHECK_DONE();
 }

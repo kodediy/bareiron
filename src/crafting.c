@@ -100,7 +100,11 @@ void getCraftingOutput (PlayerData *player, uint8_t *count, uint16_t *item) {
   uint16_t first_item = player->craft_items[first];
   uint8_t first_col = first % 3, first_row = first / 3;
 
-  if (filled && wave1Recipe(player->craft_items, filled, count, item)) return;
+  // PlayerData is packed: craft_items may sit at an odd address, and a
+  // uint16_t pointer to it would make the P4 load it misaligned
+  uint16_t grid[9];
+  memcpy(grid, player->craft_items, sizeof(grid));
+  if (filled && wave1Recipe(grid, filled, count, item)) return;
 
   switch (filled) {
 

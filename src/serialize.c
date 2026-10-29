@@ -88,8 +88,11 @@ size_t worldSnapshotWrite (uint8_t *dst, size_t capacity) {
   }
 
   for (int i = 0; i < MAX_PLAYERS; i ++) {
+    // BedSave is packed: its fields get values, never pointers
     BedSave bed;
-    bed.has = bed_spawn_point(i, &bed.x, &bed.y, &bed.z);
+    short bx, bz; uint8_t by;
+    bed.has = bed_spawn_point(i, &bx, &by, &bz);
+    bed.x = bx; bed.y = by; bed.z = bz;
     memcpy(dst, &bed, sizeof(bed));
     dst += sizeof(bed);
   }

@@ -1046,17 +1046,19 @@ uint8_t handlePlayerEating (PlayerData *player, uint8_t just_check) {
   // Exit early if player is unable to eat
   if (player->hunger >= 20) return false;
 
-  uint16_t *held_item = &player->inventory_items[player->hotbar];
+  // PlayerData is packed: inventory_items may sit at an odd address, so it
+  // is read and written by value, never through a uint16_t pointer
+  uint16_t held = player->inventory_items[player->hotbar];
   uint8_t *held_count = &player->inventory_count[player->hotbar];
 
   // Exit early if player isn't holding anything
-  if (*held_item == 0 || *held_count == 0) return false;
+  if (held == 0 || *held_count == 0) return false;
 
   uint8_t food = 0;
   uint16_t saturation = 0;
 
   // The saturation ratio from vanilla to here is about 1:500
-  switch (*held_item) {
+  switch (held) {
     case I_chicken: food = 2; saturation = 600; break;
     case I_beef: food = 3; saturation = 900; break;
     case I_porkchop: food = 3; saturation = 300; break;
@@ -1074,7 +1076,7 @@ uint8_t handlePlayerEating (PlayerData *player, uint8_t just_check) {
   if (just_check) return food != 0;
 
   // Rotten flesh: Hunger for 30 s, 4 times in 5
-  if (*held_item == I_rotten_flesh && fast_rand() % 10 < 8) eff_apply(player, EFF_HUNGER, 0, 600);
+  if (held == I_rotten_flesh && fast_rand() % 10 < 8) eff_apply(player, EFF_HUNGER, 0, 600);
 
   // Apply saturation and food boost
   player->saturation += saturation;
@@ -1083,7 +1085,7 @@ uint8_t handlePlayerEating (PlayerData *player, uint8_t just_check) {
 
   // Consume held item
   *held_count -= 1;
-  if (*held_count == 0) *held_item = 0;
+  if (*held_count == 0) player->inventory_items[player->hotbar] = held = 0;
 
   // Update the client of these changes
   sc_entityEvent(player->client_fd, player->client_fd, 9);
@@ -1091,7 +1093,7 @@ uint8_t handlePlayerEating (PlayerData *player, uint8_t just_check) {
   sc_setContainerSlot(
     player->client_fd, 0,
     serverSlotToClientSlot(0, player->hotbar),
-    *held_count, *held_item
+    *held_count, held
   );
 
   return true;
