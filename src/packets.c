@@ -1269,6 +1269,7 @@ int cs_chat (int client_fd) {
     recv_buffer[0] = '<';
     recv_buffer[name_len + 1] = '>';
     recv_buffer[name_len + 2] = ' ';
+    statusChat((char *)recv_buffer);
 
     // Forward message to all connected players
     for (int i = 0; i < MAX_PLAYERS; i ++) {

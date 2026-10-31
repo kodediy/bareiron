@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "status.h"
 #include "globals.h"
 #include "tools.h"
 #include "registries.h"
@@ -166,6 +167,7 @@ static void deathMessage (const PlayerData *player, int32_t attacker_id, uint8_t
   }
   else if (damage_type == D_cactus) snprintf((char *)recv_buffer, 64, "%s was pricked to death", name);
   else snprintf((char *)recv_buffer, 64, "%s died", name);
+  statusChat((char *)recv_buffer);
 }
 
 // The part of a hit that counts, given the invulnerability window

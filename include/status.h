@@ -11,6 +11,8 @@ void statusEmit (BareironEventType type, const char *name, int code);
 void statusPlayerJoined (PlayerData *player);
 void statusPlayerLeft (PlayerData *player);
 void statusSetRunning (uint8_t running);
+// A line the players were shown in chat, kept for bareiron_get_chat (cut to fit)
+void statusChat (const char *line);
 // The worst of each part in the current second; statusUpdate publishes and clears it
 typedef struct {
   uint32_t tick, spawn, mobs, things, net, chunks;

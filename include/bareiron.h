@@ -92,6 +92,14 @@ void bareiron_request_stop (void);
 // Copies the latest server status. Safe to call from any thread.
 void bareiron_get_status (BareironStatus *out);
 
+// The last lines of the game's chat, as players saw them: what was said
+// ("<name> text"), who joined or left and who died. Oldest first, at most
+// `max` (the newest ones); *seq counts every line ever added, so a host can
+// tell when there is something new. Thread-safe.
+#define BAREIRON_CHAT_LINES 8
+#define BAREIRON_CHAT_LEN 96
+int bareiron_get_chat (char out[][BAREIRON_CHAT_LEN], int max, uint32_t *seq);
+
 // Platform implementation for POSIX systems (macOS, Linux)
 const BareironPlatform *bareiron_posix_platform (void);
 

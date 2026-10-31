@@ -9,9 +9,36 @@ static BareironStatus status;
 // When each remembered player entered the game, by player_data index
 static int64_t joined_us[MAX_PLAYERS];
 
+// The chat's last lines, a ring; chat_seq counts every line ever added
+static char chat[BAREIRON_CHAT_LINES][BAREIRON_CHAT_LEN];
+static uint32_t chat_seq;
+
 void statusReset (void) {
   memset(&status, 0, sizeof(status));
   memset(joined_us, 0, sizeof(joined_us));
+  memset(chat, 0, sizeof(chat));
+  chat_seq = 0;
+}
+
+void statusChat (const char *line) {
+  platform->lock();
+  char *slot = chat[chat_seq % BAREIRON_CHAT_LINES];
+  strncpy(slot, line, BAREIRON_CHAT_LEN - 1);
+  slot[BAREIRON_CHAT_LEN - 1] = '\0';
+  chat_seq ++;
+  platform->unlock();
+}
+
+int bareiron_get_chat (char out[][BAREIRON_CHAT_LEN], int max, uint32_t *seq) {
+  platform->lock();
+  uint32_t kept = chat_seq < BAREIRON_CHAT_LINES ? chat_seq : BAREIRON_CHAT_LINES;
+  int n = (int)kept < max ? (int)kept : max;
+  for (int i = 0; i < n; i ++) {
+    memcpy(out[i], chat[(chat_seq - (uint32_t)n + (uint32_t)i) % BAREIRON_CHAT_LINES], BAREIRON_CHAT_LEN);
+  }
+  if (seq) *seq = chat_seq;
+  platform->unlock();
+  return n;
 }
 
 void statusEmit (BareironEventType type, const char *name, int code) {

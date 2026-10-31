@@ -182,6 +182,7 @@ void handlePlayerDisconnect (int client_fd) {
     uint8_t player_name_len = strlen(player_data[i].name);
     strcpy((char *)recv_buffer, player_data[i].name);
     strcpy((char *)recv_buffer + player_name_len, " left the game");
+    statusChat((char *)recv_buffer);
     // Broadcast this player's leave to all other connected clients
     for (int j = 0; j < MAX_PLAYERS; j ++) {
       if (player_data[j].client_fd == client_fd) continue;
@@ -230,6 +231,7 @@ void handlePlayerJoin (PlayerData* player) {
   uint8_t player_name_len = strlen(player->name);
   strcpy((char *)recv_buffer, player->name);
   strcpy((char *)recv_buffer + player_name_len, " joined the game");
+  statusChat((char *)recv_buffer);
 
   // Inform other clients (and the joining client) of the player's name and entity
   for (int i = 0; i < MAX_PLAYERS; i ++) {
