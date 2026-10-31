@@ -100,6 +100,31 @@ void bareiron_get_status (BareironStatus *out);
 #define BAREIRON_CHAT_LEN 96
 int bareiron_get_chat (char out[][BAREIRON_CHAT_LEN], int max, uint32_t *seq);
 
+// The seed a new world gets when the server starts with `config_seed` (the
+// config's seed is mixed before use), so a host can know the terrain ahead
+uint32_t bareiron_seed_for (uint32_t config_seed);
+
+// What a saved world says about itself, read without loading it. Players
+// with no name never played and are left out.
+#define BAREIRON_MAX_SAVED_PLAYERS 64   // a build check keeps it equal to MAX_PLAYERS
+typedef struct {
+  char name[16];
+  short x;
+  uint8_t y;
+  short z;
+} BareironSavedPlayer;
+
+typedef struct {
+  uint32_t seed;
+  uint16_t world_time;
+  uint8_t  player_count;                         // entries used in players
+  BareironSavedPlayer players[BAREIRON_MAX_SAVED_PLAYERS];
+} BareironWorldInfo;
+
+// Reads the header and players of a world snapshot, touching no server
+// state. 0 = ok; -1 = not a bareiron world, cut short, or another version.
+int bareiron_peek_world (const void *snapshot, size_t len, BareironWorldInfo *out);
+
 // Platform implementation for POSIX systems (macOS, Linux)
 const BareironPlatform *bareiron_posix_platform (void);
 

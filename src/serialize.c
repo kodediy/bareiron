@@ -8,6 +8,7 @@
 #include "serialize.h"
 #include "entity.h"
 #include "beds.h"
+#include "bareiron.h"
 
 static uint8_t world_dirty = false;
 static int64_t last_save_time = 0;
@@ -250,4 +251,60 @@ int loadWorld (void) {
     printf("The saved world can't be read (%d). Not starting, so it isn't overwritten.\n", result);
   }
   return result;
+}
+
+_Static_assert(BAREIRON_MAX_SAVED_PLAYERS == MAX_PLAYERS, "BareironWorldInfo must hold every saved player");
+
+uint32_t bareiron_seed_for (uint32_t config_seed) {
+  return (uint32_t)splitmix64(config_seed);
+}
+
+// Same checks and order as worldSnapshotRead, but only copies out what it
+// reports; the limits that depend on the running server (block_changes_cap,
+// ent_capacity) are not checked, the exact length still bounds everything
+int bareiron_peek_world (const void *snapshot, size_t len, BareironWorldInfo *out) {
+  if (!snapshot || !out) return -1;
+  const uint8_t *src = snapshot;
+  WorldHeader header;
+  if (len < sizeof(header)) return -1;
+  memcpy(&header, src, sizeof(header));
+  if (header.magic != WORLD_MAGIC || (header.version != 1 && header.version != WORLD_VERSION)) return -1;
+  if (header.player_size != sizeof(PlayerData) || header.player_count > MAX_PLAYERS) return -1;
+
+  // Each step is checked against len, so nothing here can wrap around
+  size_t rest = len - sizeof(header);
+  if (header.block_changes_count > rest / sizeof(BlockChange)) return -1;
+  size_t changes = (size_t)header.block_changes_count * sizeof(BlockChange);
+  rest -= changes;
+  if (header.player_count > rest / sizeof(PlayerData)) return -1;
+  size_t players = (size_t)header.player_count * sizeof(PlayerData);
+  rest -= players;
+  if (header.version == 1) {
+    if (rest != 0) return -1;
+  } else {
+    uint32_t entities;
+    if (rest < sizeof(entities)) return -1;
+    memcpy(&entities, src + sizeof(header) + changes + players, sizeof(entities));
+    rest -= sizeof(entities);
+    size_t beds = MAX_PLAYERS * sizeof(BedSave);
+    if (rest < beds || entities > (rest - beds) / sizeof(EntitySave)) return -1;
+    if (rest != beds + (size_t)entities * sizeof(EntitySave)) return -1;
+  }
+
+  memset(out, 0, sizeof(*out));
+  out->seed = header.world_seed;
+  out->world_time = header.world_time;
+  const uint8_t *p = src + sizeof(header) + changes;
+  for (uint32_t i = 0; i < header.player_count; i ++, p += sizeof(PlayerData)) {
+    PlayerData player;   // packed: copy it out, never point into it
+    memcpy(&player, p, sizeof(player));
+    if (player.name[0] == '\0') continue;
+    BareironSavedPlayer *saved = &out->players[out->player_count ++];
+    memcpy(saved->name, player.name, sizeof(saved->name));
+    saved->name[sizeof(saved->name) - 1] = '\0';
+    saved->x = player.x;
+    saved->y = player.y;
+    saved->z = player.z;
+  }
+  return 0;
 }

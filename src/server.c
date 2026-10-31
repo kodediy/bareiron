@@ -75,7 +75,7 @@ void bareiron_request_stop (void) {
 // Puts every piece of global server state back to its initial value, so
 // that the server can be started again after a stop
 static void resetServerState (const BareironConfig *config) {
-  world_seed = splitmix64(config->world_seed);
+  world_seed = bareiron_seed_for(config->world_seed);
   rng_seed = splitmix64(INITIAL_RNG_SEED);
   world_time = 0;
   server_ticks = 0;
