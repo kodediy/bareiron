@@ -11,6 +11,7 @@
 
 void cq_reset (int client_fd);                  // forget a client's queue
 void cq_clear (void);                           // forget every queue (server start)
+int  cq_alloc (void *(*alloc) (size_t size));   // see tables_alloc
 int  cq_push (int client_fd, short x, short z); // 0 queued, 1 already queued, -1 no room
 int  cq_pending (int client_fd);
 int  cq_pump (int budget);                      // sends up to `budget` chunks, one client at a time; returns how many

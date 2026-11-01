@@ -162,7 +162,7 @@ static void test_full_capacity_fails_cleanly (void) {
 // corrupted entry must never make chunk building write out of bounds.
 static void test_stale_chest_pointer_cannot_corrupt_chunks (void) {
   resetChanges(1000);
-  memset(player_data, 0, sizeof(player_data));
+  memset(player_data, 0, MAX_PLAYERS * sizeof(PlayerData));
   for (int i = 0; i < MAX_PLAYERS; i ++) player_data[i].client_fd = -1;
 
   CHECK(makeBlockChange(20, 120, -20, B_chest) == 0);

@@ -31,6 +31,7 @@ int main (int argc, char **argv) {
   p = *bareiron_posix_platform();
   platform = &p;
   world_seed = 0x432B506Fu;
+  if (tables_alloc(p.alloc_large)) return 1;   // bareiron_run's job, which this skips
   block_changes_cap = 1000;
   block_changes = calloc(block_changes_cap, sizeof(BlockChange));
   for (uint32_t i = 0; i < block_changes_cap; i ++) block_changes[i].block = 0xFF;

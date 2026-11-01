@@ -13,8 +13,16 @@ typedef struct {
   float    exhaustion;
 } PlayerEffects;
 
-static PlayerEffects state[MAX_PLAYERS];
+static PlayerEffects *state = NULL;   // MAX_PLAYERS, see tables_alloc
 static const uint16_t registry_id[EFF_COUNT] = { MEF_hunger, MEF_slowness };
+
+int eff_alloc (void *(*alloc) (size_t size)) {
+  if (!state) {
+    state = alloc(MAX_PLAYERS * sizeof(PlayerEffects));
+    if (state) memset(state, 0, MAX_PLAYERS * sizeof(PlayerEffects));
+  }
+  return state ? 0 : -1;
+}
 
 static PlayerEffects *stateOf (const PlayerData *p) {
   return &state[p - player_data];

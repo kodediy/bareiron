@@ -238,8 +238,17 @@ extern BlockChange *block_changes;
 extern uint32_t block_changes_cap;
 extern int block_changes_count;
 
-extern PlayerData player_data[MAX_PLAYERS];
+// MAX_PLAYERS of them, from tables_alloc
+extern PlayerData *player_data;
 extern int player_data_count;
+
+// The server's tables too big for a firmware's internal RAM: player_data,
+// chunk_section and the per-player state of combat, effects and beds, the
+// chunk queues, the grazed grass and the chat log. The first call takes each
+// from `alloc` and zeroes it; later calls keep them, so a host that starts
+// the server again gets the same ones back. bareiron_run passes alloc_large
+// (PSRAM on the Kode Dot); tests that skip it pass calloc's. 0 = all there.
+int tables_alloc (void *(*alloc) (size_t size));
 
 
 #endif

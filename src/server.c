@@ -88,7 +88,7 @@ static void resetServerState (const BareironConfig *config) {
     block_changes[i].block = 0xFF;
   }
 
-  memset(player_data, 0, sizeof(player_data));
+  memset(player_data, 0, MAX_PLAYERS * sizeof(PlayerData));
   player_data_count = 0;
   for (int i = 0; i < MAX_PLAYERS; i ++) player_data[i].client_fd = -1;
   for (int i = 0; i < MAX_CONNECTIONS; i ++) {
@@ -263,6 +263,11 @@ int bareiron_run (const BareironConfig *config) {
   platform = config->platform;
   // stop_requested is cleared on the way out, not here: a stop asked for
   // before this task got going is still a stop
+
+  if (tables_alloc(platform->alloc_large)) {
+    stop_requested = 0;
+    return BAREIRON_ERR_NO_MEMORY;
+  }
 
   block_changes_cap = config->max_block_changes;
   block_changes = platform->alloc_large(block_changes_cap * sizeof(BlockChange));

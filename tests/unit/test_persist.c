@@ -30,7 +30,7 @@ static void setup (void) {
   CHECK(bc_index_init(block_changes_cap) == 0);
   ent_free();
   CHECK(ent_init(64) == 0);
-  memset(player_data, 0, sizeof(player_data));
+  memset(player_data, 0, MAX_PLAYERS * sizeof(PlayerData));
   for (int i = 0; i < MAX_PLAYERS; i ++) { player_data[i].client_fd = -1; beds_forget(&player_data[i]); }
   for (short x = 0; x < 20; x ++) for (short z = 0; z < 20; z ++) makeBlockChange(x, FLOOR, z, B_stone);
   server_ticks = 0;

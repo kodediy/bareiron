@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <string.h>
 
 #include "globals.h"
 #include "packets.h"
@@ -17,9 +18,17 @@ typedef struct {
   short z[CHUNK_QUEUE_LEN];
 } ChunkQueue;
 
-static ChunkQueue queues[MAX_CONNECTIONS];
+static ChunkQueue *queues = NULL;   // MAX_CONNECTIONS, see tables_alloc
 static uint8_t queues_ready = false;
 static int next_queue = 0;       // where the next pump starts, for fairness
+
+int cq_alloc (void *(*alloc) (size_t size)) {
+  if (!queues) {
+    queues = alloc(MAX_CONNECTIONS * sizeof(ChunkQueue));
+    if (queues) memset(queues, 0, MAX_CONNECTIONS * sizeof(ChunkQueue));
+  }
+  return queues ? 0 : -1;
+}
 
 static void cqInit (void) {
   if (queues_ready) return;

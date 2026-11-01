@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdint.h>
+#include <string.h>
 #ifdef _WIN32
   #include <winsock2.h>
   #include <ws2tcpip.h>
@@ -9,6 +10,13 @@
 #include <unistd.h>
 
 #include "globals.h"
+#include "beds.h"
+#include "chunkqueue.h"
+#include "combat.h"
+#include "effects.h"
+#include "mobs.h"
+#include "status.h"
+#include "worldgen.h"
 
 
 const BareironPlatform *platform = NULL;
@@ -36,6 +44,22 @@ BlockChange *block_changes = NULL;
 uint32_t block_changes_cap = 0;
 int block_changes_count = 0;
 
-PlayerData player_data[MAX_PLAYERS];
+PlayerData *player_data = NULL;
 int player_data_count = 0;
+
+// See globals.h
+int tables_alloc (void *(*alloc) (size_t size)) {
+  if (!player_data) {
+    player_data = alloc(MAX_PLAYERS * sizeof(PlayerData));
+    if (player_data) memset(player_data, 0, MAX_PLAYERS * sizeof(PlayerData));
+  }
+  if (!chunk_section) {
+    chunk_section = alloc(4096);
+    if (chunk_section) memset(chunk_section, 0, 4096);
+  }
+  if (!player_data || !chunk_section) return -1;
+  if (combat_alloc(alloc) || eff_alloc(alloc) || beds_alloc(alloc)) return -1;
+  if (cq_alloc(alloc) || mobs_alloc(alloc) || statusAlloc(alloc)) return -1;
+  return 0;
+}
 

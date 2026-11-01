@@ -16,7 +16,7 @@ static void resetWorld (void) {
   block_changes = malloc(block_changes_cap * sizeof(BlockChange));
   for (uint32_t i = 0; i < block_changes_cap; i ++) block_changes[i].block = 0xFF;
   block_changes_count = 0;
-  memset(player_data, 0, sizeof(player_data));
+  memset(player_data, 0, MAX_PLAYERS * sizeof(PlayerData));
   for (int i = 0; i < MAX_PLAYERS; i ++) player_data[i].client_fd = -1;
   player_data_count = 0;
   bc_index_free();

@@ -33,6 +33,7 @@ float combat_armor (float damage, int armor, int toughness);
 // crits, which need the player to be falling)
 void  combat_note_movement (PlayerData *p, double y, uint8_t on_ground);
 void  combat_forget_player (PlayerData *p);   // a new player in this slot
+int   combat_alloc (void *(*alloc) (size_t size));   // see tables_alloc
 
 // Pushes an entity or a player away from (from_x, from_z), in blocks
 void  combat_knockback (int32_t target_id, double from_x, double from_z, float strength);

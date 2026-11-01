@@ -7,6 +7,7 @@
 // sends events to the host through platform->on_event
 
 void statusReset (void);
+int  statusAlloc (void *(*alloc) (size_t size));   // see tables_alloc
 void statusEmit (BareironEventType type, const char *name, int code);
 void statusPlayerJoined (PlayerData *player);
 void statusPlayerLeft (PlayerData *player);

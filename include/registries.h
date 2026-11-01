@@ -4,13 +4,13 @@
 #include <stdint.h>
 
 // Binary packet data (1064 bytes total)
-extern uint8_t registries_bin[904];
-extern uint8_t tags_bin[160];
+extern const uint8_t registries_bin[904];
+extern const uint8_t tags_bin[160];
 
-extern uint16_t block_palette[256]; // Block palette
-extern uint8_t network_block_palette[483]; // Block palette as VarInt buffer
-extern uint16_t B_to_I[256]; // Block-to-item mapping
-extern float B_blast_resistance[256]; // Vanilla blast resistance of each block
+extern const uint16_t block_palette[256]; // Block palette
+extern const uint8_t network_block_palette[483]; // Block palette as VarInt buffer
+extern const uint16_t B_to_I[256]; // Block-to-item mapping
+extern const float B_blast_resistance[256]; // Vanilla blast resistance of each block
 uint8_t I_to_B (uint16_t item); // Item-to-block mapping
 
 // Block identifiers

@@ -25,7 +25,15 @@ typedef struct {
   uint8_t  falling;
 } PlayerCombat;
 
-static PlayerCombat state[MAX_PLAYERS];
+static PlayerCombat *state = NULL;   // MAX_PLAYERS, see tables_alloc
+
+int combat_alloc (void *(*alloc) (size_t size)) {
+  if (!state) {
+    state = alloc(MAX_PLAYERS * sizeof(PlayerCombat));
+    if (state) memset(state, 0, MAX_PLAYERS * sizeof(PlayerCombat));
+  }
+  return state ? 0 : -1;
+}
 
 static PlayerCombat *stateOf (const PlayerData *p) {
   return &state[p - player_data];

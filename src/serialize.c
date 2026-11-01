@@ -59,12 +59,12 @@ size_t worldSnapshotWrite (uint8_t *dst, size_t capacity) {
   dst += (size_t)block_changes_count * sizeof(BlockChange);
 
   // Everyone is offline in a saved world
-  memcpy(dst, player_data, sizeof(player_data));
+  memcpy(dst, player_data, MAX_PLAYERS * sizeof(PlayerData));
   for (int i = 0; i < MAX_PLAYERS; i ++) {
     int offline = -1;
     memcpy(dst + i * sizeof(PlayerData) + offsetof(PlayerData, client_fd), &offline, sizeof(offline));
   }
-  dst += sizeof(player_data);
+  dst += MAX_PLAYERS * sizeof(PlayerData);
 
   // Animals and items on the ground; hostiles, arrows and lit TNT are not kept
   uint32_t n = persistentCount();
@@ -144,7 +144,7 @@ int worldSnapshotRead (const uint8_t *src, size_t len) {
   for (uint32_t i = block_changes_count; i < block_changes_cap; i ++) block_changes[i].block = 0xFF;
   src += (size_t)block_changes_count * sizeof(BlockChange);
 
-  memset(player_data, 0, sizeof(player_data));
+  memset(player_data, 0, MAX_PLAYERS * sizeof(PlayerData));
   memcpy(player_data, src, (size_t)header.player_count * sizeof(PlayerData));
 
   // Version 2: the animals and items, and the beds; version 1 had neither

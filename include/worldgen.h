@@ -26,7 +26,8 @@ uint8_t getBlockAt (int x, int y, int z);          // cached; see blockCacheForg
 uint8_t getBlockAtUncached (int x, int y, int z);  // worked out every time
 void blockCacheForget (void);                      // a block changed or the world did
 
-extern uint8_t chunk_section[4096];
+// 4096 bytes, one per block of a section, from tables_alloc
+extern uint8_t *chunk_section;
 uint8_t buildChunkSection (int cx, int cy, int cz);
 uint8_t chunkTopY (short cx, short cz); // nothing but air above this Y in chunk (cx, cz)
 

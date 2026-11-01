@@ -24,8 +24,16 @@ typedef struct {
   uint8_t y;
 } PlayerBed;
 
-static PlayerBed state[MAX_PLAYERS];
+static PlayerBed *state = NULL;   // MAX_PLAYERS, see tables_alloc
 static uint16_t asleep_ticks;
+
+int beds_alloc (void *(*alloc) (size_t size)) {
+  if (!state) {
+    state = alloc(MAX_PLAYERS * sizeof(PlayerBed));
+    if (state) memset(state, 0, MAX_PLAYERS * sizeof(PlayerBed));
+  }
+  return state ? 0 : -1;
+}
 
 uint8_t bed_is_part (uint8_t block) {
   return block >= B_white_bed_foot_north && block <= B_white_bed_head_east;

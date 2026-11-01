@@ -19,7 +19,7 @@ static void resetChanges (uint32_t capacity) {
   for (uint32_t i = 0; i < capacity; i ++) block_changes[i].block = 0xFF;
   block_changes_count = 0;
   CHECK(bc_index_init(capacity) == 0);
-  memset(player_data, 0, sizeof(player_data));
+  memset(player_data, 0, MAX_PLAYERS * sizeof(PlayerData));
   for (int i = 0; i < MAX_PLAYERS; i ++) player_data[i].client_fd = -1;
 }
 

@@ -424,7 +424,7 @@ uint8_t getBlockAtUncached (int x, int y, int z) {
 
 }
 
-uint8_t chunk_section[4096];
+uint8_t *chunk_section = NULL;   // see tables_alloc
 ChunkAnchor chunk_anchors[(16 / CHUNK_SIZE + 1) * (16 / CHUNK_SIZE + 1)];
 ChunkFeature chunk_features[256 / (CHUNK_SIZE * CHUNK_SIZE)];
 uint8_t chunk_section_height[16][16];

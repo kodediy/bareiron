@@ -596,7 +596,15 @@ static void cluck (const Entity *e, int client_fd) {
 // stay dirt.
 #define GRAZED_MAX 64
 typedef struct { short x, z; uint8_t y; uint32_t at; } Grazed;
-static Grazed grazed[GRAZED_MAX];
+static Grazed *grazed = NULL;   // GRAZED_MAX, see tables_alloc
+
+int mobs_alloc (void *(*alloc) (size_t size)) {
+  if (!grazed) {
+    grazed = alloc(GRAZED_MAX * sizeof(Grazed));
+    if (grazed) memset(grazed, 0, GRAZED_MAX * sizeof(Grazed));
+  }
+  return grazed ? 0 : -1;
+}
 static uint8_t grazed_first = 0, grazed_count = 0;
 
 static void regrowOldest (void) {

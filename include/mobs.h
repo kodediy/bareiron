@@ -58,6 +58,7 @@ typedef struct {
 const MobType *mob_type (uint16_t entity_type);
 Entity *mob_spawn (uint16_t type, int32_t x, int32_t y, int32_t z); // sets health; sent by the next network turn
 void mobs_tick (void);
+int  mobs_alloc (void *(*alloc) (size_t size));        // see tables_alloc
 void mob_hurt_reaction (Entity *e, int32_t attacker_id);   // a hit: panic or fight back
 void mob_send_extra (const Entity *e, int client_fd);      // metadata and equipment for a new tracker
 uint8_t mob_feed (Entity *e, PlayerData *p);               // its food in hand: love, or a baby grows; 1 if eaten

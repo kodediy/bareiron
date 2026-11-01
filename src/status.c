@@ -7,16 +7,28 @@
 
 static BareironStatus status;
 // When each remembered player entered the game, by player_data index
-static int64_t joined_us[MAX_PLAYERS];
+static int64_t *joined_us = NULL;   // MAX_PLAYERS, see tables_alloc
 
 // The chat's last lines, a ring; chat_seq counts every line ever added
-static char chat[BAREIRON_CHAT_LINES][BAREIRON_CHAT_LEN];
+static char (*chat)[BAREIRON_CHAT_LEN] = NULL;   // BAREIRON_CHAT_LINES of them
 static uint32_t chat_seq;
+
+int statusAlloc (void *(*alloc) (size_t size)) {
+  if (!joined_us) {
+    joined_us = alloc(MAX_PLAYERS * sizeof(int64_t));
+    if (joined_us) memset(joined_us, 0, MAX_PLAYERS * sizeof(int64_t));
+  }
+  if (!chat) {
+    chat = alloc(BAREIRON_CHAT_LINES * BAREIRON_CHAT_LEN);
+    if (chat) memset(chat, 0, BAREIRON_CHAT_LINES * BAREIRON_CHAT_LEN);
+  }
+  return (joined_us && chat) ? 0 : -1;
+}
 
 void statusReset (void) {
   memset(&status, 0, sizeof(status));
-  memset(joined_us, 0, sizeof(joined_us));
-  memset(chat, 0, sizeof(chat));
+  memset(joined_us, 0, MAX_PLAYERS * sizeof(int64_t));
+  memset(chat, 0, BAREIRON_CHAT_LINES * BAREIRON_CHAT_LEN);
   chat_seq = 0;
 }
 
@@ -30,6 +42,11 @@ void statusChat (const char *line) {
 }
 
 int bareiron_get_chat (char out[][BAREIRON_CHAT_LEN], int max, uint32_t *seq) {
+  if (!chat) {
+    // The server never started: no chat yet
+    if (seq) *seq = 0;
+    return 0;
+  }
   platform->lock();
   uint32_t kept = chat_seq < BAREIRON_CHAT_LINES ? chat_seq : BAREIRON_CHAT_LINES;
   int n = (int)kept < max ? (int)kept : max;
