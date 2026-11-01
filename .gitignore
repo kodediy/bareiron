@@ -9,3 +9,6 @@ tests/esp/sdkconfig
 tests/esp/sdkconfig.old
 tests/esp/managed_components/
 tests/esp/dependencies.lock
+
+# Working notes of the sessions that change this fork, never published.
+.superpowers/
