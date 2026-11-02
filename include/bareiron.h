@@ -23,29 +23,6 @@ typedef struct {
   int code;
 } BareironEvent;
 
-typedef struct {
-  void   *(*alloc_large) (size_t size);   // big buffers (PSRAM on the Dot); NULL on failure
-  void    (*free_large) (void *ptr);
-  void    (*lock) (void);                  // guards the status snapshot
-  void    (*unlock) (void);
-  int64_t (*now_us) (void);                // monotonic microseconds
-  void    (*yield) (void);                 // called once per loop iteration
-  void    (*on_event) (const BareironEvent *event); // may be NULL
-  // Takes ownership of `data` (allocated with alloc_large): write it now
-  // or hand it to another task, and free_large it once written. Called on
-  // the server thread, so it should return quickly. 0 = accepted.
-  int     (*save_world) (void *data, size_t len);
-  int     (*load_world) (void *data, size_t capacity, size_t *len); // 0 = ok, 1 = no world yet, <0 = error
-} BareironPlatform;
-
-typedef struct {
-  uint16_t port;               // 25565
-  uint32_t world_seed;         // used only when there is no saved world
-  uint32_t max_block_changes;  // capacity of block_changes
-  uint32_t entity_capacity;    // mobs, items, arrows at once; 0 = 512
-  const BareironPlatform *platform;
-} BareironConfig;
-
 // Most clients that can be connected at once
 #define BAREIRON_MAX_CONNECTIONS 8
 
@@ -71,7 +48,44 @@ typedef struct {
   uint32_t chunks_max_us;                        // chunks sent in one loop iteration
   uint8_t  catchup_max;                          // most ticks run in one iteration
   uint16_t entities;                             // mobs, items, arrows alive
+  uint32_t world_seed;                           // the running world's terrain (worldgen.h's *Seeded)
 } BareironStatus;
+
+typedef struct {
+  void   *(*alloc_large) (size_t size);   // big buffers (PSRAM on the Dot); NULL on failure
+  void    (*free_large) (void *ptr);
+  void    (*lock) (void);                  // guards the status snapshot
+  void    (*unlock) (void);
+  int64_t (*now_us) (void);                // monotonic microseconds
+  void    (*yield) (void);                 // called once per loop iteration
+  void    (*on_event) (const BareironEvent *event); // may be NULL
+  // Takes ownership of `data` (allocated with alloc_large): write it now
+  // or hand it to another task, and free_large it once written. Called on
+  // the server thread, so it should return quickly. 0 = accepted.
+  int     (*save_world) (void *data, size_t len);
+  int     (*load_world) (void *data, size_t capacity, size_t *len); // 0 = ok, 1 = no world yet, <0 = error
+  // The status snapshot and the chat, pushed: a host that would rather not
+  // take `lock` from another thread (an event-driven UI) keeps its own copy
+  // from these instead of calling bareiron_get_status and bareiron_get_chat.
+  // Both may be NULL, run on the server thread with the lock not held, and
+  // should return quickly; the pointer is only valid during the call.
+  // on_status: after every refresh of the snapshot, which is about once a
+  // second, when the server starts and stops, and when a player joins or
+  // leaves (before that event's on_event).
+  void    (*on_status) (const BareironStatus *status);
+  // on_chat: each line added to the chat, as bareiron_get_chat returns it
+  // (cut to BAREIRON_CHAT_LEN - 1); seq is the line's place in the count of
+  // every line ever added, the seq bareiron_get_chat would report now.
+  void    (*on_chat) (const char *line, uint32_t seq);
+} BareironPlatform;
+
+typedef struct {
+  uint16_t port;               // 25565
+  uint32_t world_seed;         // used only when there is no saved world
+  uint32_t max_block_changes;  // capacity of block_changes
+  uint32_t entity_capacity;    // mobs, items, arrows at once; 0 = 512
+  const BareironPlatform *platform;
+} BareironConfig;
 
 // Error codes returned by bareiron_run
 #define BAREIRON_ERR_SOCKET -1

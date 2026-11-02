@@ -38,7 +38,10 @@ void statusChat (const char *line) {
   strncpy(slot, line, BAREIRON_CHAT_LEN - 1);
   slot[BAREIRON_CHAT_LEN - 1] = '\0';
   chat_seq ++;
+  uint32_t seq = chat_seq;
   platform->unlock();
+  // Only this thread writes the chat: the slot holds the line until the next one
+  if (platform->on_chat) platform->on_chat(slot, seq);
 }
 
 int bareiron_get_chat (char out[][BAREIRON_CHAT_LEN], int max, uint32_t *seq) {
@@ -75,6 +78,12 @@ int statusPlayersOnline (void) {
   return online;
 }
 
+// Hands the host the snapshot just refreshed. Only the server thread writes
+// it, so it is read here without the lock, which the hook may not need.
+static void publish (void) {
+  if (platform->on_status) platform->on_status(&status);
+}
+
 // Rebuilds the snapshot from player_data; the caller holds the lock
 static void fillPlayers (void) {
   status.player_count = 0;
@@ -95,9 +104,12 @@ static void fillPlayers (void) {
 void statusSetRunning (uint8_t running) {
   platform->lock();
   status.running = running;
-  if (running) status.started_us = get_program_time();
-  else status.player_count = 0;
+  if (running) {
+    status.started_us = get_program_time();
+    status.world_seed = world_seed;   // loaded or made by now
+  } else status.player_count = 0;
   platform->unlock();
+  publish();
 }
 
 void statusPlayerJoined (PlayerData *player) {
@@ -105,6 +117,7 @@ void statusPlayerJoined (PlayerData *player) {
   platform->lock();
   fillPlayers();
   platform->unlock();
+  publish();
   statusEmit(BAREIRON_EVT_PLAYER_JOIN, player->name, 0);
 }
 
@@ -112,6 +125,7 @@ void statusPlayerLeft (PlayerData *player) {
   platform->lock();
   fillPlayers();
   platform->unlock();
+  publish();
   statusEmit(BAREIRON_EVT_PLAYER_LEAVE, player->name, 0);
 }
 
@@ -137,6 +151,7 @@ void statusUpdate (uint32_t loop_max_us) {
   status.entities = (uint16_t)ent_count();
   platform->unlock();
   memset(&tick_profile, 0, sizeof(tick_profile));
+  publish();
 }
 
 void bareiron_get_status (BareironStatus *out) {

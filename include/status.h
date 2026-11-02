@@ -3,8 +3,9 @@
 
 #include "globals.h"
 
-// Keeps the snapshot that bareiron_get_status hands to the host, and
-// sends events to the host through platform->on_event
+// Keeps the snapshot that bareiron_get_status hands to the host, pushes it
+// and the chat through platform->on_status and on_chat, and sends events to
+// the host through platform->on_event
 
 void statusReset (void);
 int  statusAlloc (void *(*alloc) (size_t size));   // see tables_alloc
