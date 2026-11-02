@@ -11,18 +11,25 @@
 #include "worldgen.h"
 #include "blockindex.h"
 
-uint32_t getChunkHash (short x, short z) {
+// The *Seeded functions are any seed's terrain, pure (see worldgen.h); the
+// plain names are the server's, for the world in world_seed.
+
+uint32_t getChunkHashSeeded (short x, short z, uint32_t seed) {
 
   uint8_t buf[8];
   memcpy(buf, &x, 2);
   memcpy(buf + 2, &z, 2);
-  memcpy(buf + 4, &world_seed, 4);
+  memcpy(buf + 4, &seed, 4);
 
   return splitmix64(*((uint64_t *)buf));
 
 }
 
-uint8_t getChunkBiome (short x, short z) {
+uint32_t getChunkHash (short x, short z) {
+  return getChunkHashSeeded(x, z, world_seed);
+}
+
+uint8_t getChunkBiomeSeeded (short x, short z, uint32_t seed) {
 
   // Center biomes on 0;0
   x += BIOME_RADIUS;
@@ -45,8 +52,12 @@ uint8_t getChunkBiome (short x, short z) {
   // beaches. Using the world seed as a repeating pattern avoids
   // having to generate and layer yet another hash.
   uint8_t index = abs((biome_x & 3) + ((biome_z * 4) & 15));
-  return (world_seed >> (index * 2)) & 3;
+  return (seed >> (index * 2)) & 3;
 
+}
+
+uint8_t getChunkBiome (short x, short z) {
+  return getChunkBiomeSeeded(x, z, world_seed);
 }
 
 uint8_t getCornerHeight (uint32_t hash, uint8_t biome) {
@@ -140,7 +151,7 @@ uint8_t getHeightAtFromAnchors (int rx, int rz, ChunkAnchor *anchor_ptr) {
 
 }
 
-uint8_t getHeightAtFromHash (int rx, int rz, int _x, int _z, uint32_t chunk_hash, uint8_t biome) {
+uint8_t getHeightAtFromHashSeeded (int rx, int rz, int _x, int _z, uint32_t chunk_hash, uint8_t biome, uint32_t seed) {
 
   if (rx == 0 && rz == 0) {
     int height = getCornerHeight(chunk_hash, biome);
@@ -148,27 +159,35 @@ uint8_t getHeightAtFromHash (int rx, int rz, int _x, int _z, uint32_t chunk_hash
   }
   return interpolate(
     getCornerHeight(chunk_hash, biome),
-    getCornerHeight(getChunkHash(_x + 1, _z), getChunkBiome(_x + 1, _z)),
-    getCornerHeight(getChunkHash(_x, _z + 1), getChunkBiome(_x, _z + 1)),
-    getCornerHeight(getChunkHash(_x + 1, _z + 1), getChunkBiome(_x + 1, _z + 1)),
+    getCornerHeight(getChunkHashSeeded(_x + 1, _z, seed), getChunkBiomeSeeded(_x + 1, _z, seed)),
+    getCornerHeight(getChunkHashSeeded(_x, _z + 1, seed), getChunkBiomeSeeded(_x, _z + 1, seed)),
+    getCornerHeight(getChunkHashSeeded(_x + 1, _z + 1, seed), getChunkBiomeSeeded(_x + 1, _z + 1, seed)),
     rx, rz
   );
 
 }
 
+uint8_t getHeightAtFromHash (int rx, int rz, int _x, int _z, uint32_t chunk_hash, uint8_t biome) {
+  return getHeightAtFromHashSeeded(rx, rz, _x, _z, chunk_hash, biome, world_seed);
+}
+
 // Get terrain height at the given coordinates
 // Does *not* account for block changes
-uint8_t getHeightAt (int x, int z) {
+uint8_t getHeightAtSeeded (int x, int z, uint32_t seed) {
 
   int _x = div_floor(x, CHUNK_SIZE);
   int _z = div_floor(z, CHUNK_SIZE);
   int rx = mod_abs(x, CHUNK_SIZE);
   int rz = mod_abs(z, CHUNK_SIZE);
-  uint32_t chunk_hash = getChunkHash(_x, _z);
-  uint8_t biome = getChunkBiome(_x, _z);
+  uint32_t chunk_hash = getChunkHashSeeded(_x, _z, seed);
+  uint8_t biome = getChunkBiomeSeeded(_x, _z, seed);
 
-  return getHeightAtFromHash(rx, rz, _x, _z, chunk_hash, biome);
+  return getHeightAtFromHashSeeded(rx, rz, _x, _z, chunk_hash, biome, seed);
 
+}
+
+uint8_t getHeightAt (int x, int z) {
+  return getHeightAtSeeded(x, z, world_seed);
 }
 
 uint8_t getTerrainAtFromCache (int x, int y, int z, int rx, int rz, ChunkAnchor anchor, ChunkFeature feature, uint8_t height) {
@@ -321,7 +340,7 @@ uint8_t getTerrainAtFromCache (int x, int y, int z, int rx, int rz, ChunkAnchor 
 
 }
 
-ChunkFeature getFeatureFromAnchor (ChunkAnchor anchor) {
+ChunkFeature getFeatureFromAnchorSeeded (ChunkAnchor anchor, uint32_t seed) {
 
   ChunkFeature feature;
   uint8_t feature_position = anchor.hash % (CHUNK_SIZE * CHUNK_SIZE);
@@ -345,9 +364,9 @@ ChunkFeature getFeatureFromAnchor (ChunkAnchor anchor) {
   } else {
     feature.x += anchor.x * CHUNK_SIZE;
     feature.z += anchor.z * CHUNK_SIZE;
-    feature.y = getHeightAtFromHash(
+    feature.y = getHeightAtFromHashSeeded(
       mod_abs(feature.x, CHUNK_SIZE), mod_abs(feature.z, CHUNK_SIZE),
-      anchor.x, anchor.z, anchor.hash, anchor.biome
+      anchor.x, anchor.z, anchor.hash, anchor.biome, seed
     ) + 1;
     feature.variant = (anchor.hash >> (feature.x + feature.z)) & 1;
   }
@@ -356,7 +375,11 @@ ChunkFeature getFeatureFromAnchor (ChunkAnchor anchor) {
 
 }
 
-uint8_t getTerrainAt (int x, int y, int z, ChunkAnchor anchor) {
+ChunkFeature getFeatureFromAnchor (ChunkAnchor anchor) {
+  return getFeatureFromAnchorSeeded(anchor, world_seed);
+}
+
+uint8_t getTerrainAtSeeded (int x, int y, int z, ChunkAnchor anchor, uint32_t seed) {
 
   if (y > 80) return B_air;
 
@@ -365,11 +388,15 @@ uint8_t getTerrainAt (int x, int y, int z, ChunkAnchor anchor) {
   if (rx < 0) rx += CHUNK_SIZE;
   if (rz < 0) rz += CHUNK_SIZE;
 
-  ChunkFeature feature = getFeatureFromAnchor(anchor);
-  uint8_t height = getHeightAtFromHash(rx, rz, anchor.x, anchor.z, anchor.hash, anchor.biome);
+  ChunkFeature feature = getFeatureFromAnchorSeeded(anchor, seed);
+  uint8_t height = getHeightAtFromHashSeeded(rx, rz, anchor.x, anchor.z, anchor.hash, anchor.biome, seed);
 
   return getTerrainAtFromCache(x, y, z, rx, rz, anchor, feature, height);
 
+}
+
+uint8_t getTerrainAt (int x, int y, int z, ChunkAnchor anchor) {
+  return getTerrainAtSeeded(x, y, z, anchor, world_seed);
 }
 
 // What getBlockAt computed, remembered: mobs ask for the same blocks tick
